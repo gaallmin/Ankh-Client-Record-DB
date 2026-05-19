@@ -828,9 +828,6 @@ export default function AddRecordPage() {
                   <div className="space-y-4">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                       <h3 className="text-lg font-medium">{t('AddRecord.customerDetails')}</h3>
-                      <Button type="button" onClick={addCustomerRow} variant="outline" size="sm">
-                        {t('AddRecord.addGroupCustomer')}
-                      </Button>
                     </div>
 
                     {lessonForm.customers.map((customer, index) => {
