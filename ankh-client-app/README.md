@@ -817,8 +817,9 @@ cd Ankh-Client-Record-DB/ankh-client-app
 npm install
 
 # 3. Configure environment
-cp .env.example .env.local
-# Edit .env.local — fill in DATABASE_URL, DIRECT_URL, JWT_SECRET
+cp .env.production.example .env.local
+# Edit .env.local — fill in DATABASE_URL, DIRECT_URL, JWT_SECRET,
+# QSTASH_* values, and NEXT_PUBLIC_APP_URL as needed
 
 # 4. Apply database migrations
 npx prisma migrate deploy
@@ -831,6 +832,8 @@ npm run seed
 npm run dev
 # → http://localhost:3000 (redirects to /en)
 ```
+
+If you only need a quick local run, the minimum required steps are: install dependencies, set up `.env.local`, apply migrations, seed the first account, and run `npm run dev`. For production-like verification, also run `npm run build` before deploying.
 
 ### Useful Commands
 
