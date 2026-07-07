@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma'
 import bcrypt from 'bcryptjs'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
     const { username, password, role, firstName, lastName, email } = await request.json()
 
     // Validate input
-    if (!username || !password || !role || !firstName || !lastName || !email) {
+    if (!username || !password || !role || !firstName || !email) {
       return NextResponse.json(
         { error: 'All fields are required' },
         { status: 400 }
@@ -87,7 +87,31 @@ export async function POST(request: NextRequest) {
 // GET route to fetch all users (for management purposes)
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+  const role = searchParams.get('role');
+
     const users = await prisma.user.findMany({
+      where: search
+        ? role
+          ? {
+              role: role as 'MANAGER' | 'INSTRUCTOR',
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          : {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        : role
+          ? { role: role as 'MANAGER' | 'INSTRUCTOR' }
+          : {},
       select: {
         id: true,
         username: true,
@@ -95,20 +119,35 @@ export async function GET(request: NextRequest) {
         firstName: true,
         lastName: true,
         email: true,
-        createdAt: true
+        createdAt: true,
+        lessons: {
+          include: {
+            lessonParticipants: {
+              include: {
+                customer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
       }
-    })
+    });
 
-    return NextResponse.json({ users })
-
+    return NextResponse.json({ users });
   } catch (error) {
-    console.error('Error fetching users:', error)
+    console.error('Error fetching users:', error);
     return NextResponse.json(
       { error: 'Internal server error while fetching users' },
       { status: 500 }
-    )
+    );
   }
 }

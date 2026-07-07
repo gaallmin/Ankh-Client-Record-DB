@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../../lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Search for instructors (Users with INSTRUCTOR role) by name
     const instructors = await prisma.user.findMany({
       where: {
         role: 'INSTRUCTOR',
@@ -32,15 +31,12 @@ export async function GET(request: NextRequest) {
         lessons: {
           select: {
             id: true,
-            title: true,
-            startTime: true,
-            lessonType: true,
-            courseCompletionStatus: true
+            lessonType: true
           },
           orderBy: {
-            startTime: 'desc'
+            createdAt: 'desc'
           },
-          take: 5 // Limit to last 5 lessons
+          take: 5
         }
       },
       orderBy: [

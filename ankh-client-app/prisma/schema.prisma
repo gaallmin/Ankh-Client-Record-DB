@@ -1,17 +1,12 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -27,12 +22,15 @@ model User {
   firstName String
   lastName  String
   email     String   @unique
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relationships
-  lessons Lesson[]
+  lessons                      Lesson[]
+  lessonInstructorAssignments  LessonInstructor[] @relation("LessonInstructors")
 
+  @@index([firstName])
+  @@index([lastName])
   @@map("users")
 }
 
@@ -42,47 +40,65 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relationships
   lessons Lesson[]
 
   @@map("locations")
 }
 
 model Customer {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  firstName String
-  lastName  String
-  phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(cuid())
+  externalId String?   // Customer ID as it appears in the source import file
+  email      String?   @unique
+  firstName  String
+  lastName   String
+  phone      String?
+  company    String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
-  // Many-to-many relationship with lessons
   lessonParticipants LessonParticipant[]
 
+  @@index([externalId])
+  @@index([firstName])
+  @@index([lastName])
+  @@index([deletedAt])
+  @@index([createdAt])
   @@map("customers")
 }
 
 model Lesson {
   id                    String   @id @default(cuid())
-  title                 String
-  startTime             DateTime
-  endTime               DateTime
-  lessonType            String   // 'Group' or 'Individual'
-  courseCompletionStatus String  // 'In Progress' or 'Completed'
+  lessonType            String
+  lessonContent         String?
+  groupParticipantCount Int?
+  groupCompany          String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  // Foreign keys
   instructorId String
   locationId   String
 
-  // Relationships
-  instructor User @relation(fields: [instructorId], references: [id])
-  location   Location @relation(fields: [locationId], references: [id])
-  lessonParticipants LessonParticipant[]
+  instructor             User                @relation(fields: [instructorId], references: [id])
+  location               Location            @relation(fields: [locationId], references: [id])
+  lessonParticipants     LessonParticipant[]
+  additionalInstructors  LessonInstructor[]
 
+  @@index([instructorId])
+  @@index([locationId])
+  @@index([createdAt])
   @@map("lessons")
+}
+
+model LessonInstructor {
+  id       String @id @default(cuid())
+  lessonId String
+  userId   String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user     User   @relation("LessonInstructors", fields: [userId], references: [id])
+
+  @@unique([lessonId, userId])
+  @@map("lesson_instructors")
 }
 
 model LessonParticipant {
@@ -91,15 +107,36 @@ model LessonParticipant {
   lessonId             String
   customerSymptoms     String?
   customerImprovements String?
-  status               String   @default("attended") // 'attended', 'absent', 'cancelled'
+  status               String   @default("attended")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  // Relationships
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   lesson   Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
-  // Composite unique constraint
   @@unique([customerId, lessonId])
+  @@index([customerId])
+  @@index([lessonId])
   @@map("lesson_participants")
+}
+
+model AppSettings {
+  id       String @id @default("singleton")
+  settings Json   @default("{}")
+
+  @@map("app_settings")
+}
+
+model ImportJob {
+  id        String   @id @default(cuid())
+  status    String   @default("queued")
+  progress  Int      @default(0)
+  message   String   @default("")
+  totalRows Int      @default(0)
+  rowErrors Json     @default("[]")
+  rowsJson  String?  // Temporarily stores raw parsed rows; cleared after processing
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("import_jobs")
 }

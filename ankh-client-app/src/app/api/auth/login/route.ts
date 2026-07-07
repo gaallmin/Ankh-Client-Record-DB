@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../../lib/prisma'
 import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { prisma } from '@/lib/prisma'
+// 🔑 NEW: Retrieve your secret key from environment variables
+const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'; 
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,9 +17,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user by username
-    const user = await prisma.user.findUnique({
-      where: { username },
+    // Find user by username or email (instructors imported from Excel have auto-generated usernames)
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ username }, { email: username }]
+      },
       select: {
         id: true,
         username: true,
@@ -35,7 +40,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Compare password
+    // Compare password first, then sign token
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
       return NextResponse.json(
@@ -44,12 +49,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const payload = { userId: user.id, username: user.username, role: user.role }
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' })
+
     // Return user data (excluding password)
     const { password: _, ...userData } = user
     
     return NextResponse.json({
       message: 'Login successful',
-      user: userData
+      user: userData,
+      token
     }, { status: 200 })
 
   } catch (error) {

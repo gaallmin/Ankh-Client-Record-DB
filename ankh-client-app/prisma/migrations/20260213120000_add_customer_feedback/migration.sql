@@ -1,0 +1,1 @@
+-- No-op migration (customer feedback column removed)

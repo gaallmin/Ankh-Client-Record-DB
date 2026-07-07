@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const nameFilter = searchParams.get('search')
+
     const locations = await prisma.location.findMany({
-      select: {
-        id: true,
-        name: true,
-        createdAt: true
-      },
-      orderBy: {
-        name: 'asc'
-      }
+      where: nameFilter ? { name: { contains: nameFilter, mode: 'insensitive' } } : {},
+      select: { id: true, name: true, createdAt: true },
+      orderBy: { name: 'asc' }
     })
 
-    return NextResponse.json({ locations })
-
+    return NextResponse.json(
+      { locations },
+      {
+        headers: {
+          // Locations change very rarely — cache aggressively.
+          // 60s fresh, then serve stale for up to 5 minutes while revalidating.
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+        }
+      }
+    )
   } catch (error) {
     console.error('Error fetching locations:', error)
     return NextResponse.json(
@@ -29,7 +35,6 @@ export async function POST(request: NextRequest) {
   try {
     const { name } = await request.json()
 
-    // Validate input
     if (!name || name.trim().length === 0) {
       return NextResponse.json(
         { error: 'Location name is required' },
@@ -37,7 +42,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if location already exists
     const existingLocation = await prisma.location.findUnique({
       where: { name: name.trim() }
     })
@@ -49,23 +53,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create location
     const newLocation = await prisma.location.create({
-      data: {
-        name: name.trim()
-      },
-      select: {
-        id: true,
-        name: true,
-        createdAt: true
-      }
+      data: { name: name.trim() },
+      select: { id: true, name: true, createdAt: true }
     })
 
-    return NextResponse.json({
-      message: 'Location created successfully',
-      location: newLocation
-    }, { status: 201 })
-
+    return NextResponse.json(
+      { message: 'Location created successfully', location: newLocation },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Location creation error:', error)
     return NextResponse.json(
