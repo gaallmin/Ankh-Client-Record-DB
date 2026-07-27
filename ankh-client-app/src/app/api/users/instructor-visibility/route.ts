@@ -1,21 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
-
-
-function requireManager(request: NextRequest) {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (!token) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  try {
-    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
-    if (decoded.role !== 'MANAGER') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-    return { ok: true }
-  } catch {
-    return { error: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) }
-  }
-}
+import { requireManager } from '@/lib/staffAuth'
 
 // GET — return all instructors/managers with their isActive status
 export async function GET(request: NextRequest) {

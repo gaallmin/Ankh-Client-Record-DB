@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Upload, X, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, ChevronDown } from 'lucide-react'
-import Cookies from 'js-cookie'
 import { useAndroidBackDismiss } from '@/hooks/useAndroidBackDismiss'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -167,10 +166,8 @@ export function UploadModal({ open, onClose, onSuccess }: UploadModalProps) {
       const formData = new FormData()
       formData.append('file', file)
 
-      const token = Cookies.get('jwt-token')
       const res = await fetch('/api/import/start', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       })
 

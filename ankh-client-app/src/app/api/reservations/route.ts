@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
 import { notifyCustomer, reservationEventKey } from '@/lib/notifications'
 import { isReservationOverlapError } from '@/lib/reservationConflicts'
-
-
-const requireStaff = (request: NextRequest) => {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (!token) {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  }
-  try {
-    const decoded = jwt.verify(token, getJwtSecret()) as { userId?: string; role?: string }
-    if (decoded.role !== 'MANAGER' && decoded.role !== 'INSTRUCTOR') {
-      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-    }
-    return { ok: true, userId: decoded.userId, role: decoded.role }
-  } catch {
-    return { error: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) }
-  }
-}
+import { requireStaff } from '@/lib/staffAuth'
 
 const RESERVATION_SELECT = {
   id: true,

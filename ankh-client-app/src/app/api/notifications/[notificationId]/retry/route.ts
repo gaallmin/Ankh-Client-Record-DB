@@ -1,26 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
 import { attemptPushSend } from '@/lib/notifications'
-
-
-const requireStaff = (request: NextRequest) => {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (!token) {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  }
-  try {
-    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
-    if (decoded.role !== 'MANAGER' && decoded.role !== 'INSTRUCTOR') {
-      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-    }
-    return { ok: true }
-  } catch {
-    return { error: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) }
-  }
-}
+import { requireStaff } from '@/lib/staffAuth'
 
 // POST /api/notifications/[notificationId]/retry — staff retry of a FAILED send.
 // Reuses the SAME notification row (same dedupeKey), so a retry can never

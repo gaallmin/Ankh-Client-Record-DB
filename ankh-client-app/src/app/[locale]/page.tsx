@@ -377,11 +377,25 @@ export default function HomePage() {
 
   // ── Init ──
   useEffect(() => {
-    const token = Cookies.get('jwt-token')
-    if (token) {
-      const u = Cookies.get('current-user-data')
-      if (u) { setCurrentUser(JSON.parse(u)); setIsLoggedIn(true) }
-    }
+    let cancelled = false
+    // Remove legacy JavaScript-readable authentication data. Staff sessions now
+    // live only in the server-issued HttpOnly cookie.
+    Cookies.remove('jwt-token')
+    Cookies.remove('current-user-data')
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) return null
+        const data = await response.json()
+        return data.user as User
+      })
+      .then(user => {
+        if (!cancelled && user) {
+          setCurrentUser(user)
+          setIsLoggedIn(true)
+        }
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
   }, [])
   useEffect(() => { if (isLoggedIn) fetchCount() }, [isLoggedIn])
 
@@ -446,15 +460,20 @@ export default function HomePage() {
       const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
       if (r.ok) {
         const d = await r.json()
-        Cookies.set('jwt-token', d.token, { expires: 1 })
-        Cookies.set('current-user-data', JSON.stringify({ firstName: d.user.firstName, lastName: d.user.lastName, role: d.user.role }), { expires: 7 })
+        Cookies.remove('jwt-token')
+        Cookies.remove('current-user-data')
         setCurrentUser(d.user); setIsLoggedIn(true); setShowLogin(false); setLoginForm({ username: '', password: '' })
       } else { const d = await r.json(); setLoginError(d.error || t('HomePage.loginFailed')) }
     } catch { setLoginError(t('HomePage.loginFailed')) } finally { setLoginLoading(false) }
   }
-  const handleLogout = () => {
-    Cookies.remove('jwt-token'); Cookies.remove('current-user-data')
-    setCurrentUser(null); setIsLoggedIn(false); setResults([]); setAllCustomers([]); setAllUsers([])
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      Cookies.remove('jwt-token')
+      Cookies.remove('current-user-data')
+      setCurrentUser(null); setIsLoggedIn(false); setResults([]); setAllCustomers([]); setAllUsers([])
+    }
   }
   // Issue 1: openEdit now sets a single 'name' field
   const openEdit = (c: Customer) => {
@@ -466,9 +485,8 @@ export default function HomePage() {
     if (!editModal || !editForm.name || !editForm.email) { setEditError('All fields required.'); return }
     const { firstName, lastName } = splitFullName(editForm.name)
     setEditLoading(true); setEditError('')
-    const token = Cookies.get('jwt-token')
     try {
-      const r = await fetch(`/api/customers/${editModal.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ firstName, lastName, email: editForm.email, phone: editForm.phone, company: editForm.company || null }) })
+      const r = await fetch(`/api/customers/${editModal.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ firstName, lastName, email: editForm.email, phone: editForm.phone, company: editForm.company || null }) })
       if (r.ok) {
         const { customer: u } = await r.json()
         setAllCustomers(p => p.map(c => c.id === u.id ? { ...c, ...u } : c))
@@ -480,8 +498,7 @@ export default function HomePage() {
   }
   const deleteCustomer = (id: string, name: string) => {
     setConfirm({ title: t('HomePage.deleteCustomerTitle'), message: t('HomePage.deleteCustomerMessage', { name }), fn: async () => {
-      const token = Cookies.get('jwt-token')
-      const r = await fetch(`/api/customers/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+      const r = await fetch(`/api/customers/${id}`, { method: 'DELETE' })
       if (r.ok) { setResults(p => p.filter(c => c.id !== id)); setAllCustomers(p => p.filter(c => c.id !== id)); if (detailModal?.id === id) setDetailModal(null); fetchCount(); flash('Customer deleted.') }
       else flash('Failed to delete customer.')
       setConfirm(null)
@@ -491,17 +508,15 @@ export default function HomePage() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault(); setAddUserLoading(true); setAddUserError('')
     const { firstName, lastName } = splitFullName(addUserForm.name)
-    const token = Cookies.get('jwt-token')
     try {
-      const r = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ ...addUserForm, firstName, lastName }) })
+      const r = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...addUserForm, firstName, lastName }) })
       if (r.ok) { setAddUserModal(false); setAddUserForm({ username: '', password: '', role: 'INSTRUCTOR', name: '', email: '' }); flash('User created!'); if (showAllUsers) fetchAllUsers() }
       else { const d = await r.json(); setAddUserError(d.error || 'Failed.') }
     } catch { setAddUserError('Unexpected error.') } finally { setAddUserLoading(false) }
   }
   const deleteUser = (id: string, name: string) => {
     setConfirm({ title: t('HomePage.deleteUserTitle'), message: t('HomePage.deleteUserMessage', { name }), fn: async () => {
-      const token = Cookies.get('jwt-token')
-      const r = await fetch(`/api/users/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+      const r = await fetch(`/api/users/${id}`, { method: 'DELETE' })
       if (r.ok) { setAllUsers(p => p.filter(u => u.id !== id)); flash('User deleted.') }
       setConfirm(null)
     }})
@@ -509,12 +524,11 @@ export default function HomePage() {
   const openAddLocation = () => { setEditingLocId(null); setLocName(''); setLocError(''); setAddLocModal(true) }
   const saveLocation = async (e: React.FormEvent) => {
     e.preventDefault(); setLocLoading(true); setLocError('')
-    const token = Cookies.get('jwt-token')
     try {
       const url = editingLocId ? `/api/locations/${editingLocId}` : '/api/locations'
       const r = await fetch(url, {
         method: editingLocId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: locName.trim() })
       })
       if (r.ok) {
@@ -532,11 +546,10 @@ export default function HomePage() {
   const cancelEditLp = () => { setEditingLpId(null) }
   const saveLpEdit = async (lp: CustomerLessonParticipant) => {
     setEditLpLoading(true)
-    const token = Cookies.get('jwt-token')
     try {
       const r = await fetch(`/api/lessons/${lp.lesson.id}/participants/${detailModal?.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerSymptoms: editLpForm.symptoms, customerImprovements: editLpForm.improvements, notes: editLpForm.notes })
       })
       if (r.ok) {
@@ -568,10 +581,8 @@ export default function HomePage() {
       title: t('ManageUsers.deleteLesson'),
       message: t('ManageUsers.deleteLessonMessage'),
       fn: async () => {
-        const token = Cookies.get('jwt-token')
         const r = await fetch(`/api/lessons/${lp.lesson.id}/participants/${detailModal?.id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
+          method: 'DELETE'
         })
         if (r.ok) {
           setDetailModal(prev => {

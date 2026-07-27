@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import Cookies from 'js-cookie'
 
 // Helper: split "Full Name" → { firstName, lastName }
 const splitFullName = (fullName: string): { firstName: string; lastName: string } => {
@@ -139,20 +138,16 @@ export default function AddRecordPage() {
 
   // Check authentication
   useEffect(() => {
-    const token = Cookies.get('jwt-token')
-    if (!token) {
-      router.push(`/${locale}`)
-    } else {
+    fetch('/api/auth/me', { cache: 'no-store' }).then(response => {
+      if (!response.ok) { router.replace(`/${locale}`); return }
       fetchInstructors()
       fetchLocations()
-    }
+    }).catch(() => router.replace(`/${locale}`))
   }, [])
 
   const fetchInstructors = async () => {
-    const token = Cookies.get('jwt-token')
     try {
       const response = await fetch('/api/users/instructors', {
-        headers: { 'Authorization': `Bearer ${token}` },
         cache: 'no-store'
       })
       if (response.ok) {
@@ -268,14 +263,11 @@ export default function AddRecordPage() {
 
     setIsEditingSaving(true)
     setEditError(null)
-    const token = Cookies.get('jwt-token')
-
     try {
       const response = await fetch(`/api/customers/${editingCustomerId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           firstName,

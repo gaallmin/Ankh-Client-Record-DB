@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
+import { requireManager } from '@/lib/staffAuth'
 
 
 export const DEFAULT_SETTINGS = {
@@ -33,15 +32,8 @@ export async function GET() {
 
 // PATCH — manager only
 export async function PATCH(request: NextRequest) {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  try {
-    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
-    if (decoded.role !== 'MANAGER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  } catch {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-  }
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
 
   try {
     const { settings } = await request.json()

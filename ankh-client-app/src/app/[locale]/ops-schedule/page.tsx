@@ -6,7 +6,6 @@ import {
 } from 'lucide-react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import Cookies from 'js-cookie'
 
 const DAY_START_HOUR = 9
 const DAY_END_HOUR = 20
@@ -89,7 +88,9 @@ export default function OpsSchedulePage() {
   const [instructors, setInstructors] = useState<Instructor[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loadingReservations, setLoadingReservations] = useState(false)
+  const [reservationsError, setReservationsError] = useState<string | null>(null)
   const [unassignedQueue, setUnassignedQueue] = useState<UnassignedReservation[]>([])
+  const [unassignedError, setUnassignedError] = useState<string | null>(null)
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [assignPick, setAssignPick] = useState<Record<string, string>>({})
 
@@ -109,16 +110,19 @@ export default function OpsSchedulePage() {
   const isManagerView = effectiveRole === 'manager'
 
   useEffect(() => {
-    const token = Cookies.get('jwt-token')
-    if (!token) { router.push(`/${locale}`); return }
-    const userData = Cookies.get('current-user-data')
-    if (userData) {
-      try {
-        const parsed = JSON.parse(userData)
-        setCurrentUser(parsed)
-        setRole(parsed.role === 'MANAGER' ? 'manager' : 'instructor')
-      } catch { /* ignore */ }
-    }
+    let cancelled = false
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Unauthorized')
+        return response.json()
+      })
+      .then(data => {
+        if (cancelled) return
+        setCurrentUser(data.user)
+        setRole(data.user.role === 'MANAGER' ? 'manager' : 'instructor')
+      })
+      .catch(() => { if (!cancelled) router.replace(`/${locale}`) })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -148,8 +152,8 @@ export default function OpsSchedulePage() {
   }, [rangeStart, viewMode])
 
   const fetchReservations = useCallback(async () => {
-    const token = Cookies.get('jwt-token')
     setLoadingReservations(true)
+    setReservationsError(null)
     try {
       const params = new URLSearchParams({
         from: rangeStart.toISOString(), to: rangeEnd.toISOString(),
@@ -157,19 +161,29 @@ export default function OpsSchedulePage() {
       })
       if (isManagerView && instructorFilter !== 'all') params.set('instructorId', instructorFilter)
       if (statusFilter !== 'all') params.set('status', statusFilter)
-      const r = await fetch(`/api/reservations?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
-      if (r.ok) { const d = await r.json(); setReservations(d.reservations || []) }
-    } catch { /* keep previous data on transient failure */ }
+      const r = await fetch(`/api/reservations?${params.toString()}`, { cache: 'no-store' })
+      if (r.status === 401) {
+        router.replace(`/${locale}`)
+        throw new Error(t('OpsSchedule.sessionExpired'))
+      }
+      if (!r.ok) {
+        const d = await r.json().catch(() => null)
+        throw new Error(d?.error || `${t('OpsSchedule.loadError')} (${r.status})`)
+      }
+      const d = await r.json()
+      setReservations(d.reservations || [])
+    } catch (error) {
+      setReservationsError(error instanceof Error ? error.message : t('OpsSchedule.loadError'))
+    }
     finally { setLoadingReservations(false) }
-  }, [rangeStart, rangeEnd, isManagerView, instructorFilter, statusFilter])
+  }, [rangeStart, rangeEnd, isManagerView, instructorFilter, statusFilter, locale, router, t])
 
   const transitionSession = async (reservationId: string, body: Record<string, unknown>) => {
     setActionBusy(true)
-    const token = Cookies.get('jwt-token')
     try {
       const r = await fetch(`/api/reservations/${reservationId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
       if (r.ok) { setSelectedSession(null); fetchReservations(); fetchUnassignedRef.current?.() }
@@ -178,10 +192,9 @@ export default function OpsSchedulePage() {
 
   const retryNotification = async (notificationId: string) => {
     setRetryingId(notificationId)
-    const token = Cookies.get('jwt-token')
     try {
       await fetch(`/api/notifications/${notificationId}/retry`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }
+        method: 'POST'
       })
       fetchReservations()
       setSelectedSession(null)
@@ -192,12 +205,19 @@ export default function OpsSchedulePage() {
 
   const fetchUnassigned = useCallback(async () => {
     if (!isManagerView) return
-    const token = Cookies.get('jwt-token')
+    setUnassignedError(null)
     try {
-      const r = await fetch('/api/reservations/unassigned', { headers: { Authorization: `Bearer ${token}` } })
-      if (r.ok) { const d = await r.json(); setUnassignedQueue(d.reservations || []) }
-    } catch { /* no-op */ }
-  }, [isManagerView])
+      const r = await fetch('/api/reservations/unassigned', { cache: 'no-store' })
+      if (!r.ok) {
+        const d = await r.json().catch(() => null)
+        throw new Error(d?.error || `${t('OpsSchedule.unassignedLoadError')} (${r.status})`)
+      }
+      const d = await r.json()
+      setUnassignedQueue(d.reservations || [])
+    } catch (error) {
+      setUnassignedError(error instanceof Error ? error.message : t('OpsSchedule.unassignedLoadError'))
+    }
+  }, [isManagerView, t])
 
   useEffect(() => { if (currentUser) fetchUnassigned() }, [currentUser, fetchUnassigned])
   useEffect(() => { fetchUnassignedRef.current = fetchUnassigned }, [fetchUnassigned])
@@ -273,11 +293,10 @@ export default function OpsSchedulePage() {
   const confirmAssign = async (id: string) => {
     const instructorId = assignPick[id]
     if (!instructorId) return
-    const token = Cookies.get('jwt-token')
     try {
       const r = await fetch(`/api/reservations/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instructorId })
       })
       if (r.ok) {
@@ -293,14 +312,13 @@ export default function OpsSchedulePage() {
     if (!bookingClient) { setBookingError(t('OpsSchedule.selectClientFirst')); return }
     if (isManagerView && !bookingInstructor) { setBookingError(t('OpsSchedule.selectInstructorFirst')); return }
     setBookingSaving(true)
-    const token = Cookies.get('jwt-token')
     try {
       const [hh, mm] = bookingTime.split(':').map(Number)
       const scheduledAt = new Date(bookingDate)
       scheduledAt.setHours(hh, mm, 0, 0)
       const r = await fetch('/api/reservations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: bookingClient.id,
           instructorId: isManagerView ? bookingInstructor : currentUser?.id,
@@ -359,6 +377,19 @@ export default function OpsSchedulePage() {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-5 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+
+        {reservationsError && (
+          <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-950/40 px-4 py-3 text-red-100">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{t('OpsSchedule.loadError')}</p>
+              <p className="mt-0.5 break-words text-xs text-red-300">{reservationsError}</p>
+            </div>
+            <button onClick={fetchReservations} disabled={loadingReservations} className="rounded-md border border-red-400/30 px-3 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-400/10 disabled:opacity-50">
+              {loadingReservations ? '…' : t('OpsSchedule.retryLoad')}
+            </button>
+          </div>
+        )}
 
         {/* Toolbar */}
         <div className="bg-[#161d2c] border border-white/10 rounded-lg px-4 py-3 flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -496,6 +527,12 @@ export default function OpsSchedulePage() {
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#2a2114] text-[#e0b466]">{unassignedQueue.length}</span>
                 </div>
                 <div className="flex flex-col gap-2">
+                  {unassignedError && (
+                    <div role="alert" className="rounded-md border border-red-500/20 bg-red-950/30 p-2.5 text-xs text-red-300">
+                      <p>{unassignedError}</p>
+                      <button onClick={fetchUnassigned} className="mt-1.5 font-semibold text-red-200 underline">{t('OpsSchedule.retryLoad')}</button>
+                    </div>
+                  )}
                   {unassignedQueue.map(u => {
                     const dt = new Date(u.scheduledAt)
                     const isAssigning = assigningId === u.id

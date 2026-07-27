@@ -8,6 +8,12 @@ import {
   signClientToken,
 } from '../clientAuth'
 import { getJwtSecret } from '../jwtSecret'
+import {
+  STAFF_SESSION_COOKIE,
+  requireManager,
+  requireStaff,
+  setStaffSessionCookie,
+} from '../staffAuth'
 
 const ORIGINAL_SECRET = process.env.JWT_SECRET
 const TEST_SECRET = 'test-only-secret-that-is-at-least-thirty-two-characters-long'
@@ -60,5 +66,58 @@ describe('client session isolation', () => {
     process.env.JWT_SECRET = TEST_SECRET
     const decoded = jwt.verify(signClientToken('client-2'), TEST_SECRET, { audience: 'client' }) as { clientAccountId: string }
     expect(decoded.clientAccountId).toBe('client-2')
+  })
+})
+
+describe('staff HttpOnly sessions', () => {
+  it('authenticates a staff JWT from a protected cookie', () => {
+    process.env.JWT_SECRET = TEST_SECRET
+    const token = jwt.sign(
+      { userId: 'staff-1', username: 'manager', role: 'MANAGER' },
+      TEST_SECRET,
+      { audience: 'staff', expiresIn: '1d' },
+    )
+    const response = NextResponse.json({ user: { id: 'staff-1' } })
+    setStaffSessionCookie(response, token)
+
+    const setCookie = response.headers.get('set-cookie') || ''
+    expect(setCookie).toContain(`${STAFF_SESSION_COOKIE}=`)
+    expect(setCookie.toLowerCase()).toContain('httponly')
+    expect(setCookie.toLowerCase()).toContain('samesite=strict')
+
+    const request = new NextRequest('http://localhost/api/auth/me', {
+      headers: { cookie: setCookie.split(';')[0] },
+    })
+    expect(requireStaff(request)).toMatchObject({
+      ok: true,
+      userId: 'staff-1',
+      username: 'manager',
+      role: 'MANAGER',
+    })
+  })
+
+  it('enforces manager-only access', () => {
+    process.env.JWT_SECRET = TEST_SECRET
+    const token = jwt.sign(
+      { userId: 'staff-2', role: 'INSTRUCTOR' },
+      TEST_SECRET,
+      { audience: 'staff' },
+    )
+    const request = new NextRequest('http://localhost/api/settings', {
+      headers: { cookie: `${STAFF_SESSION_COOKIE}=${token}` },
+    })
+    const result = requireManager(request)
+    expect(result).toHaveProperty('error')
+    if ('error' in result) expect(result.error.status).toBe(403)
+  })
+
+  it('rejects a client JWT because it does not have the staff audience', () => {
+    process.env.JWT_SECRET = TEST_SECRET
+    const request = new NextRequest('http://localhost/api/auth/me', {
+      headers: { cookie: `${STAFF_SESSION_COOKIE}=${signClientToken('client-3')}` },
+    })
+    const result = requireStaff(request)
+    expect(result).toHaveProperty('error')
+    if ('error' in result) expect(result.error.status).toBe(401)
   })
 })

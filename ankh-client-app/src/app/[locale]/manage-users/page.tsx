@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Search, Loader2, ArrowLeft, Edit3, Check, X, AlertCircle, Shield, User, KeyRound, Mail, Tag } from 'lucide-react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import Cookies from 'js-cookie'
 
 // Helper: split "Full Name" → { firstName, lastName }
 const splitFullName = (fullName: string): { firstName: string; lastName: string } => {
@@ -106,18 +105,18 @@ export default function ManageUsersPage() {
   const [saveOk, setSaveOk] = useState(false)
 
   useEffect(() => {
-    const token = Cookies.get('jwt-token')
-    if (!token) router.push(`/${locale}`)
+    fetch('/api/auth/me', { cache: 'no-store' }).then(async response => {
+      if (!response.ok) { router.replace(`/${locale}`); return }
+      const data = await response.json()
+      if (data.user?.role !== 'MANAGER') router.replace(`/${locale}`)
+    }).catch(() => router.replace(`/${locale}`))
   }, [])
 
   const doSearch = async () => {
     if (!searchTerm.trim()) return
     setSearching(true); setSearchErr(null); setSearched(true); setResults([])
-    const token = Cookies.get('jwt-token')
     try {
-      const r = await fetch(`/api/users/search?name=${encodeURIComponent(searchTerm)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const r = await fetch(`/api/users/search?name=${encodeURIComponent(searchTerm)}`)
       if (r.ok) { const d = await r.json(); setResults(d.users || []) }
       else setSearchErr('Search failed. Please try again.')
     } catch { setSearchErr('Network error. Please try again.') }
@@ -137,7 +136,6 @@ export default function ManageUsersPage() {
     if (!editForm.name.trim() || !editForm.email.trim()) { setSaveErr('Full name and email are required.'); return }
     const { firstName, lastName } = splitFullName(editForm.name)
     setSaving(true); setSaveErr(null); setSaveOk(false)
-    const token = Cookies.get('jwt-token')
     try {
       const body: Record<string, string> = {
         firstName,
@@ -148,7 +146,7 @@ export default function ManageUsersPage() {
       if (editForm.password.trim()) body.password = editForm.password
       const r = await fetch(`/api/users/${editId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
       if (r.ok) {

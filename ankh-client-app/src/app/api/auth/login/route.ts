@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
 import { getJwtSecret } from '@/lib/jwtSecret'
+import { setStaffSessionCookie } from '@/lib/staffAuth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,16 +50,17 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = { userId: user.id, username: user.username, role: user.role }
-    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '1d' })
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '1d', audience: 'staff' })
 
     // Return user data (excluding password)
     const { password: _, ...userData } = user
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: 'Login successful',
       user: userData,
-      token
     }, { status: 200 })
+    setStaffSessionCookie(response, token)
+    return response
 
   } catch (error) {
     console.error('Login error:', error)

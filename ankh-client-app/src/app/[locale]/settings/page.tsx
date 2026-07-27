@@ -178,13 +178,16 @@ export default function SettingsPage() {
   const [instrDirty, setInstrDirty] = useState(false)
 
   useEffect(() => {
-    const token = Cookies.get('jwt-token')
-    if (!token) { router.push(`/${locale}`); return }
-    loadAll(token)
+    fetch('/api/auth/me', { cache: 'no-store' }).then(async response => {
+      if (!response.ok) { router.replace(`/${locale}`); return }
+      const data = await response.json()
+      if (data.user?.role !== 'MANAGER') { router.replace(`/${locale}`); return }
+      loadAll()
+    }).catch(() => router.replace(`/${locale}`))
   }, [])
 
-  const loadAll = async (token: string) => {
-    await Promise.all([loadSettings(), loadInstructors(token)])
+  const loadAll = async () => {
+    await Promise.all([loadSettings(), loadInstructors()])
   }
 
   const loadSettings = async () => {
@@ -200,10 +203,10 @@ export default function SettingsPage() {
     }
   }
 
-  const loadInstructors = async (token: string) => {
+  const loadInstructors = async () => {
     setInstrLoading(true); setInstrLoadError(null)
     try {
-      const r = await fetch('/api/users/instructor-visibility', { headers: { Authorization: `Bearer ${token}` } })
+      const r = await fetch('/api/users/instructor-visibility')
       if (!r.ok) { setInstrLoadError('Failed to load instructors.'); return }
       const data = await r.json()
       const list: Instructor[] = data.instructors || []
@@ -225,11 +228,10 @@ export default function SettingsPage() {
 
   const saveSettings = async () => {
     setSettingsSaving(true); setSettingsSaveOk(false); setSettingsSaveErr(null)
-    const token = Cookies.get('jwt-token')
     try {
       const r = await fetch('/api/settings', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: appSettings })
       })
       if (!r.ok) { const d = await r.json(); setSettingsSaveErr(d.error || 'Failed to save.'); return }
@@ -257,12 +259,11 @@ export default function SettingsPage() {
 
   const saveInstructors = async () => {
     setInstrSaving(true); setInstrSaveOk(false); setInstrSaveErr(null)
-    const token = Cookies.get('jwt-token')
     try {
       const updates = instructors.map(i => ({ id: i.id, isActive: filterEnabled ? activeIds.has(i.id) : true }))
       const r = await fetch('/api/users/instructor-visibility', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates })
       })
       if (!r.ok) { const d = await r.json(); setInstrSaveErr(d.error || 'Failed to save.'); return }
