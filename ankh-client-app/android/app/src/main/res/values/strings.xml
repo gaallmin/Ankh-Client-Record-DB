@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ankh Client Record DB</string>
+    <string name="title_activity_main">Ankh Client Record DB</string>
+    <string name="package_name">com.ankh.clientrecorddb</string>
+    <string name="custom_url_scheme">com.ankh.clientrecorddb</string>
+</resources>

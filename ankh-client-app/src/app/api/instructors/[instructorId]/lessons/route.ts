@@ -36,6 +36,8 @@ export async function GET(
         lessonContent: true,
         groupParticipantCount: true,
         groupCompany: true,
+        groupCustomerChange: true,
+        groupNotes: true,
         createdAt: true,
         location: { select: { name: true } },
         lessonParticipants: {
@@ -44,6 +46,7 @@ export async function GET(
             id: true,
             customerSymptoms: true,
             customerImprovements: true,
+            notes: true,
             status: true,
             customer: {
               select: { id: true, firstName: true, lastName: true, company: true }

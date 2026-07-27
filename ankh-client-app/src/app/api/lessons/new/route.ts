@@ -15,7 +15,9 @@ export async function POST(request: NextRequest) {
         location,
         customers,
         groupParticipantCount,
-        groupCompany
+        groupCompany,
+        groupCustomerChange,
+        groupNotes
     } = requestBody;
 
     if (!lessonType || !instructorId || !location) {
@@ -53,6 +55,8 @@ export async function POST(request: NextRequest) {
                 lessonContent: lessonContent || null,
                 groupParticipantCount: lessonType === 'Group' ? (groupParticipantCount ?? null) : null,
                 groupCompany: lessonType === 'Group' ? (groupCompany || null) : null,
+                groupCustomerChange: lessonType === 'Group' ? (groupCustomerChange || null) : null,
+                groupNotes: lessonType === 'Group' ? (groupNotes || null) : null,
                 ...(lessonCreatedAt ? { createdAt: lessonCreatedAt } : {}),
                 instructor: {
                     connect: { id: instructorId }
@@ -64,8 +68,11 @@ export async function POST(request: NextRequest) {
             select: {
                 id: true,
                 lessonType: true,
+                lessonContent: true,
                 groupParticipantCount: true,
                 groupCompany: true,
+                groupCustomerChange: true,
+                groupNotes: true,
                 createdAt: true,
                 instructorId: true,
                 locationId: true
@@ -132,9 +139,10 @@ export async function POST(request: NextRequest) {
                     data: {
                         lessonId: newLesson.id,
                         customerId: customer.id,
-                        status: customerData?.feedback || "attended",
+                        status: "attended",
                         customerSymptoms: customerData?.symptoms,
-                        customerImprovements: customerData?.improvements
+                        customerImprovements: customerData?.improvements,
+                        notes: customerData?.notes || null
                     }
                 });
             }

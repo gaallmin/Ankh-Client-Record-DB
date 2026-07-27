@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
+import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'
 
 export const DEFAULT_SETTINGS = {
   // User Experience
@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest) {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
+    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
     if (decoded.role !== 'MANAGER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   } catch {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 })

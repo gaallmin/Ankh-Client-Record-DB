@@ -294,7 +294,7 @@ export default function SettingsPage() {
 
       <div className="min-h-screen bg-[#f7f7f5]">
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40">
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
             <button onClick={() => router.push(`/${locale}`)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
               <ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Back</span>
@@ -308,7 +308,7 @@ export default function SettingsPage() {
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 fade">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(2rem+env(safe-area-inset-bottom))] fade">
           <div className="mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h2>
             <p className="text-xs sm:text-sm text-gray-400 mt-1">ADMIN / MANAGER ONLY — Configure app visibility and preferences</p>

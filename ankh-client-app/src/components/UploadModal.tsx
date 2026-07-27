@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Upload, X, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, ChevronDown } from 'lucide-react'
 import Cookies from 'js-cookie'
+import { useAndroidBackDismiss } from '@/hooks/useAndroidBackDismiss'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type JobStatus = 'idle' | 'uploading' | 'queued' | 'processing' | 'complete' | 'failed'
@@ -151,8 +152,8 @@ export function UploadModal({ open, onClose, onSuccess }: UploadModalProps) {
     setFileError('')
     if (!f) return
     const ext = f.name.split('.').pop()?.toLowerCase()
-    if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
-      setFileError('Please select a CSV, XLSX, or XLS file.')
+    if (!['csv', 'xlsx'].includes(ext || '')) {
+      setFileError('Please select a CSV or XLSX file.')
       return
     }
     setFile(f)
@@ -201,6 +202,8 @@ export function UploadModal({ open, onClose, onSuccess }: UploadModalProps) {
     onClose()
   }
 
+  useAndroidBackDismiss(open, handleClose)
+
   if (!open) return null
 
   const isActive = job.status === 'uploading' || job.status === 'queued' || job.status === 'processing'
@@ -229,7 +232,7 @@ export function UploadModal({ open, onClose, onSuccess }: UploadModalProps) {
               </div>
               <div>
                 <h2 className="text-[15px] font-semibold text-gray-900">Import Records</h2>
-                <p className="text-xs text-gray-400 mt-0.5">CSV, XLSX, or XLS supported</p>
+                <p className="text-xs text-gray-400 mt-0.5">CSV or XLSX supported</p>
               </div>
             </div>
             <button
@@ -270,7 +273,7 @@ export function UploadModal({ open, onClose, onSuccess }: UploadModalProps) {
                     <span className="text-xs text-gray-400 mt-1">Excel or CSV</span>
                   </>
                 )}
-                <input type="file" accept=".csv,.xlsx,.xls" className="hidden"
+                <input type="file" accept=".csv,.xlsx" className="hidden"
                   onChange={e => handleFile(e.target.files?.[0] || null)} />
               </label>
             )}

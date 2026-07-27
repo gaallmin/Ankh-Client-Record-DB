@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -12,6 +11,56 @@ datasource db {
 enum UserRole {
   MANAGER
   INSTRUCTOR
+}
+
+enum LessonInstructorRole {
+  PRIMARY
+  ASSISTANT
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  WAITLISTED
+  PENDING
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum NotificationType {
+  RESERVATION_REQUESTED
+  RESERVATION_CONFIRMED
+  RESERVATION_REMINDER
+  RESERVATION_CANCELLED
+  RESERVATION_CHANGED
+  WAITLIST_CONFIRMED
+  LOYALTY_MESSAGE
+  STAFF_MESSAGE
+}
+
+enum NotificationChannel {
+  SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum ReservationSource {
+  CLIENT
+  DELEGATE
+  INSTRUCTOR
+  MANAGER
+}
+
+enum UnavailabilityCategory {
+  BUSINESS_TRIP
+  TRAINING
+  OTHER
 }
 
 model User {
@@ -26,22 +75,33 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Legacy primary-instructor relation. New code should use
+  // LessonInstructor.assignment instead; retained during the migration period
+  // so existing APIs and historical imports remain compatible.
   lessons                      Lesson[]
   lessonInstructorAssignments  LessonInstructor[] @relation("LessonInstructors")
+  reservations                 Reservation[]
+  availabilityTemplates        AvailabilityTemplate[]
+  unavailabilityBlocks         UnavailabilityBlock[]
 
   @@index([firstName])
   @@index([lastName])
+  @@index([role, isActive])
   @@map("users")
 }
 
 model Location {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-  lessons Lesson[]
+  lessons      Lesson[]
+  reservations Reservation[]
 
+  @@index([name])
+  @@index([deletedAt])
   @@map("locations")
 }
 
@@ -57,7 +117,11 @@ model Customer {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  lessonParticipants LessonParticipant[]
+  lessonParticipants    LessonParticipant[]
+  reservations          Reservation[]
+  unavailabilityBlocks  UnavailabilityBlock[]
+  clientAccount         ClientAccount?
+  notifications         Notification[]
 
   @@index([externalId])
   @@index([firstName])
@@ -73,16 +137,23 @@ model Lesson {
   lessonContent         String?
   groupParticipantCount Int?
   groupCompany          String?
+  groupCustomerChange   String?
+  groupNotes            String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  // Legacy primary instructor pointer. It is retained for backward
+  // compatibility while LessonInstructor becomes the canonical assignment
+  // table. The migration backfills a PRIMARY assignment for every row.
   instructorId String
   locationId   String
 
   instructor             User                @relation(fields: [instructorId], references: [id])
   location               Location            @relation(fields: [locationId], references: [id])
   lessonParticipants     LessonParticipant[]
+  // Contains both PRIMARY and ASSISTANT assignments after migration.
   additionalInstructors  LessonInstructor[]
+  reservation            Reservation?
 
   @@index([instructorId])
   @@index([locationId])
@@ -91,13 +162,18 @@ model Lesson {
 }
 
 model LessonInstructor {
-  id       String @id @default(cuid())
-  lessonId String
-  userId   String
+  id         String                @id @default(cuid())
+  lessonId   String
+  userId     String
+  assignment LessonInstructorRole  @default(ASSISTANT)
+  assignedAt DateTime              @default(now())
+
   lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  user     User   @relation("LessonInstructors", fields: [userId], references: [id])
+  user     User   @relation("LessonInstructors", fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([lessonId, userId])
+  @@index([userId, lessonId])
+  @@index([lessonId, assignment])
   @@map("lesson_instructors")
 }
 
@@ -107,6 +183,7 @@ model LessonParticipant {
   lessonId             String
   customerSymptoms     String?
   customerImprovements String?
+  notes                String?
   status               String   @default("attended")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -118,6 +195,156 @@ model LessonParticipant {
   @@index([customerId])
   @@index([lessonId])
   @@map("lesson_participants")
+}
+
+model Reservation {
+  id                String            @id @default(cuid())
+  customerId        String
+  instructorId      String? // null while unassigned — this IS the "unassigned queue"
+  locationId        String?
+  scheduledAt       DateTime
+  durationMinutes   Int               @default(60)
+  status            ReservationStatus
+  source            ReservationSource
+  isInstructorAdded Boolean           @default(false)
+  waitlistPosition  Int? // set only when status = WAITLISTED (global per exact scheduledAt)
+  lessonId          String?           @unique // set once the session is actually logged
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  instructor User?     @relation(fields: [instructorId], references: [id])
+  location   Location? @relation(fields: [locationId], references: [id])
+  lesson     Lesson?   @relation(fields: [lessonId], references: [id])
+
+  notifications Notification[]
+
+  @@index([instructorId])
+  @@index([customerId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("reservations")
+}
+
+// Separate client-facing account system, fully decoupled from staff `User` accounts.
+// customerId is nullable: an account starts unlinked and a MANAGER links it to exactly
+// one existing Customer record after verifying identity (never auto-merged).
+model ClientAccount {
+  id             String    @id @default(cuid())
+  username       String    @unique
+  password       String
+  phone          String?
+  email          String?
+  customerId     String?   @unique
+  linkVerifiedAt DateTime?
+  notifyByPush   Boolean   @default(true)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  devices       ClientDevice[]
+  notifications Notification[]
+
+  @@index([customerId])
+  @@map("client_accounts")
+}
+
+model ClientDevice {
+  id              String    @id @default(cuid())
+  clientAccountId String
+  platform        String // "android" | "ios" | "web"
+  token           String    @unique
+  createdAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  revokedAt       DateTime?
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([clientAccountId])
+  @@map("client_devices")
+}
+
+model Notification {
+  id              String             @id @default(cuid())
+  type            NotificationType
+  channel         NotificationChannel
+  status          NotificationStatus @default(PENDING)
+  dedupeKey       String             @unique // idempotency: one notification per (event, channel)
+  title           String
+  body            String
+  customerId      String?
+  clientAccountId String?
+  clientDeviceId  String?
+  reservationId   String?
+  providerId      String?
+  error           String?
+  attempts        Int                @default(0)
+  createdAt       DateTime           @default(now())
+  sentAt          DateTime?
+
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id])
+  clientDevice  ClientDevice?  @relation(fields: [clientDeviceId], references: [id], onDelete: SetNull)
+  reservation   Reservation?   @relation(fields: [reservationId], references: [id])
+
+  @@index([customerId])
+  @@index([clientDeviceId])
+  @@index([reservationId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  String // "USER" (staff) | "CLIENT" | "SYSTEM"
+  actorId    String
+  action     String // e.g. "CLIENT_ACCOUNT_LINKED", "CLIENT_ACCOUNT_UNLINKED", "CLIENT_ACCOUNT_CREATED"
+  targetType String
+  targetId   String
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model AvailabilityTemplate {
+  id           String   @id @default(cuid())
+  instructorId String
+  dayOfWeek    Int // 0=Mon .. 6=Sun
+  startTime    String // "09:00"
+  endTime      String // "18:00"
+  slotMinutes  Int      @default(30)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  instructor User @relation(fields: [instructorId], references: [id])
+
+  @@index([instructorId])
+  @@map("availability_templates")
+}
+
+model UnavailabilityBlock {
+  id           String                 @id @default(cuid())
+  customerId   String?
+  instructorId String?
+  startDate    DateTime
+  endDate      DateTime
+  category     UnavailabilityCategory
+  notes        String?
+  createdAt    DateTime               @default(now())
+
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  instructor User?     @relation(fields: [instructorId], references: [id])
+
+  @@index([customerId])
+  @@index([instructorId])
+  @@map("unavailability_blocks")
 }
 
 model AppSettings {

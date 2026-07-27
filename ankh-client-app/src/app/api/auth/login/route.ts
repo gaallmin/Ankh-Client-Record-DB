@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
-// 🔑 NEW: Retrieve your secret key from environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'; 
+import { getJwtSecret } from '@/lib/jwtSecret'
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = { userId: user.id, username: user.username, role: user.role }
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' })
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '1d' })
 
     // Return user data (excluding password)
     const { password: _, ...userData } = user

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
+import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'
 
 const requireAuth = (request: NextRequest) => {
   const authHeader = request.headers.get('authorization') || ''
@@ -13,7 +13,7 @@ const requireAuth = (request: NextRequest) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
+    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
     if (decoded.role !== 'MANAGER' && decoded.role !== 'INSTRUCTOR') {
       return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
     }
@@ -32,7 +32,7 @@ const requireManager = (request: NextRequest) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
+    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
     if (decoded.role !== 'MANAGER') {
       return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
     }
@@ -60,7 +60,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { customerSymptoms, customerImprovements, status } = body
+    const { customerSymptoms, customerImprovements, notes, status } = body
 
     const updatedParticipant = await prisma.lessonParticipant.update({
       where: {
@@ -72,6 +72,7 @@ export async function PUT(
       data: {
         ...(customerSymptoms !== undefined ? { customerSymptoms } : {}),
         ...(customerImprovements !== undefined ? { customerImprovements } : {}),
+        ...(notes !== undefined ? { notes } : {}),
         ...(status !== undefined ? { status } : {})
       }
     })

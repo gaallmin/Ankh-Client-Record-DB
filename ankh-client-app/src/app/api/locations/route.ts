@@ -1,5 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import jwt from 'jsonwebtoken'
+import { getJwtSecret } from '@/lib/jwtSecret'
 import { prisma } from '@/lib/prisma'
+
+
+const requireManager = (request: NextRequest) => {
+  const authHeader = request.headers.get('authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+  if (!token) {
+    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  }
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
+    if (decoded.role !== 'MANAGER') {
+      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+    }
+    return { ok: true }
+  } catch {
+    return { error: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) }
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,7 +27,10 @@ export async function GET(request: NextRequest) {
     const nameFilter = searchParams.get('search')
 
     const locations = await prisma.location.findMany({
-      where: nameFilter ? { name: { contains: nameFilter, mode: 'insensitive' } } : {},
+      where: {
+        deletedAt: null,
+        ...(nameFilter ? { name: { contains: nameFilter, mode: 'insensitive' } } : {})
+      },
       select: { id: true, name: true, createdAt: true },
       orderBy: { name: 'asc' }
     })
@@ -33,6 +56,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = requireManager(request)
+    if ('error' in auth) return auth.error
+
     const { name } = await request.json()
 
     if (!name || name.trim().length === 0) {
@@ -42,8 +68,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const existingLocation = await prisma.location.findUnique({
-      where: { name: name.trim() }
+    const existingLocation = await prisma.location.findFirst({
+      where: { name: name.trim(), deletedAt: null }
     })
 
     if (existingLocation) {

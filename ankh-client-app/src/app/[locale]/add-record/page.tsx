@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Cookies from 'js-cookie'
@@ -58,19 +59,32 @@ interface CustomerFormData {
   lastName: string   // Split before submit
   phone?: string
   company?: string
-  symptoms: string
-  improvements: string
-  feedback: string
+  symptoms: string      // 고객 상태 (Customer Status)
+  improvements: string  // 고객 변화 (Customer Change)
+  notes: string          // 특이사항 및 요청사항 (Special Notes / Requests)
 }
 
 interface LessonFormData {
   instructorIds: string[]   // Array of instructor IDs (first is primary)
   locationId: string
   lessonType: 'Group' | 'Individual'
-  lessonDate: string        // ISO date string, e.g. "2025-03-15"
+  lessonDate: Date | undefined
+  lessonTime: string        // 24h "HH:mm", e.g. "14:30"
+  lessonContent: string     // 수업 진행 내용 — shared, once per lesson
   customers: CustomerFormData[]
   groupParticipantCount: number
   groupCompany: string
+  groupCustomerChange: string  // 고객 변화 — shared across the group
+  groupNotes: string           // 특이사항 및 요청사항 — shared across the group
+}
+
+// Combine a date-only Date with a "HH:mm" time string into one ISO datetime
+const combineDateAndTime = (date: Date | undefined, time: string): string | undefined => {
+  if (!date) return undefined
+  const [hh, mm] = (time || '00:00').split(':').map(Number)
+  const combined = new Date(date)
+  combined.setHours(hh || 0, mm || 0, 0, 0)
+  return combined.toISOString()
 }
 
 export default function AddRecordPage() {
@@ -109,10 +123,14 @@ export default function AddRecordPage() {
     instructorIds: [''],
     locationId: '',
     lessonType: 'Individual',
-    lessonDate: '',
-    customers: [{ name: '', firstName: '', lastName: '', phone: '', company: '', symptoms: '', improvements: '', feedback: '' }],
+    lessonDate: undefined,
+    lessonTime: '',
+    lessonContent: '',
+    customers: [{ name: '', firstName: '', lastName: '', phone: '', company: '', symptoms: '', improvements: '', notes: '' }],
     groupParticipantCount: 0,
-    groupCompany: ''
+    groupCompany: '',
+    groupCustomerChange: '',
+    groupNotes: ''
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -223,7 +241,7 @@ export default function AddRecordPage() {
         company: customer.company || '',
         symptoms: '',
         improvements: '',
-        feedback: ''
+        notes: ''
       }]
     })
     setStep('form')
@@ -296,7 +314,7 @@ export default function AddRecordPage() {
   const addCustomerRow = () => {
     setLessonForm({
       ...lessonForm,
-      customers: [...lessonForm.customers, { name: '', firstName: '', lastName: '', phone: '', company: '', symptoms: '', improvements: '', feedback: '' }]
+      customers: [...lessonForm.customers, { name: '', firstName: '', lastName: '', phone: '', company: '', symptoms: '', improvements: '', notes: '' }]
     })
   }
 
@@ -354,15 +372,20 @@ export default function AddRecordPage() {
 
       let payload: Record<string, unknown>
 
+      const lessonDateTime = combineDateAndTime(lessonForm.lessonDate, lessonForm.lessonTime)
+
       if (lessonForm.lessonType === 'Group') {
         payload = {
           lessonType: 'Group',
-          lessonDate: lessonForm.lessonDate || undefined,
+          lessonDate: lessonDateTime,
+          lessonContent: lessonForm.lessonContent || undefined,
           instructorId: primaryInstructorId,
           instructorIds: allInstructorIds,
           location: lessonForm.locationId,
           groupParticipantCount: lessonForm.groupParticipantCount,
-          groupCompany: lessonForm.groupCompany || undefined
+          groupCompany: lessonForm.groupCompany || undefined,
+          groupCustomerChange: lessonForm.groupCustomerChange || undefined,
+          groupNotes: lessonForm.groupNotes || undefined
         }
       } else {
         const processedCustomers = lessonForm.customers.map(c => {
@@ -375,7 +398,8 @@ export default function AddRecordPage() {
 
         payload = {
           lessonType: lessonForm.lessonType,
-          lessonDate: lessonForm.lessonDate || undefined,
+          lessonDate: lessonDateTime,
+          lessonContent: lessonForm.lessonContent || undefined,
           instructorId: primaryInstructorId,
           instructorIds: allInstructorIds,
           location: lessonForm.locationId,
@@ -408,7 +432,7 @@ export default function AddRecordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 via-[#f7f7f5] to-[#f7f7f5]">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40">
+      <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-5 h-16 flex items-center gap-3 flex-wrap">
           <button
             onClick={() => router.push(`/${locale}`)}
@@ -425,7 +449,7 @@ export default function AddRecordPage() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-5 py-6">
+      <div className="max-w-5xl mx-auto px-5 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
 
         {/* Step 1: Select Lesson Type (Individual or Group) */}
         {step === 'select-lesson-type' && (
@@ -776,16 +800,35 @@ export default function AddRecordPage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="lessonDate" className="mb-2 block">{t('AddRecord.lessonDateLabel')}</Label>
-                    <input
-                      id="lessonDate"
-                      type="date"
-                      value={lessonForm.lessonDate}
-                      max={new Date().toISOString().split('T')[0]}
-                      onChange={(e) => setLessonForm({ ...lessonForm, lessonDate: e.target.value })}
-                      className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    <Label className="mb-2 block">{t('AddRecord.lessonDateLabel')}</Label>
+                    <DatePicker
+                      date={lessonForm.lessonDate}
+                      onDateChange={(d) => setLessonForm({ ...lessonForm, lessonDate: d })}
+                      placeholder={t('AddRecord.selectDate')}
+                      disabled={{ after: new Date() }}
                     />
                     <p className="text-xs text-gray-400 mt-1">{t('AddRecord.lessonDateHint')}</p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="lessonTime" className="mb-2 block">{t('AddRecord.lessonTimeLabel')}</Label>
+                    <Input
+                      id="lessonTime"
+                      type="time"
+                      value={lessonForm.lessonTime}
+                      onChange={(e) => setLessonForm({ ...lessonForm, lessonTime: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <Label htmlFor="lessonContent" className="mb-2 block">{t('AddRecord.lessonContent')}</Label>
+                    <Textarea
+                      id="lessonContent"
+                      value={lessonForm.lessonContent}
+                      onChange={(e) => setLessonForm({ ...lessonForm, lessonContent: e.target.value })}
+                      placeholder={t('AddRecord.lessonContentPlaceholder')}
+                      rows={3}
+                    />
                   </div>
                 </div>
 
@@ -818,6 +861,28 @@ export default function AddRecordPage() {
                         value={lessonForm.groupCompany}
                         onChange={(e) => setLessonForm({ ...lessonForm, groupCompany: e.target.value })}
                         placeholder={t('AddRecord.groupCompanyPlaceholder')}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="groupCustomerChange" className="mb-2 block">
+                        {t('AddRecord.groupCustomerChangeLabel')}
+                      </Label>
+                      <Textarea
+                        id="groupCustomerChange"
+                        value={lessonForm.groupCustomerChange}
+                        onChange={(e) => setLessonForm({ ...lessonForm, groupCustomerChange: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="groupNotes" className="mb-2 block">
+                        {t('AddRecord.groupNotesLabel')}
+                      </Label>
+                      <Textarea
+                        id="groupNotes"
+                        value={lessonForm.groupNotes}
+                        onChange={(e) => setLessonForm({ ...lessonForm, groupNotes: e.target.value })}
+                        rows={3}
                       />
                     </div>
                   </div>
@@ -891,10 +956,10 @@ export default function AddRecordPage() {
                             </div>
 
                             <div>
-                              <Label className="mb-2 block">{t('AddRecord.feedbackLabel')}</Label>
+                              <Label className="mb-2 block">{t('AddRecord.notesLabel')}</Label>
                               <Textarea
-                                value={customer.feedback}
-                                onChange={(e) => updateCustomerField(index, 'feedback', e.target.value)}
+                                value={customer.notes}
+                                onChange={(e) => updateCustomerField(index, 'notes', e.target.value)}
                                 rows={2}
                               />
                             </div>

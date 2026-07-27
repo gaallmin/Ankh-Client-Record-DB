@@ -1,0 +1,22 @@
+node_modules/
+
+# Native build output and local SDK/signing configuration
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/google-services.json
+ios/App/DerivedData/
+ios/App/App/GoogleService-Info.plist
+*.jks
+*.keystore
+*.p8
+*.mobileprovision
+*.ipa
+*.apk
+*.aab
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/

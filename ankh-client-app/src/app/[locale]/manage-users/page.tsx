@@ -177,7 +177,7 @@ export default function ManageUsersPage() {
       <div className="min-h-screen bg-[#f7f7f5]">
 
         {/* ── Header ── */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40">
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
           <div className="max-w-4xl mx-auto px-5 h-14 flex items-center gap-3">
             <button
               onClick={() => router.push(`/${locale}`)}
@@ -192,7 +192,7 @@ export default function ManageUsersPage() {
         </header>
 
         {/* ── Main ── */}
-        <main className="max-w-4xl mx-auto px-5 py-8">
+        <main className="max-w-4xl mx-auto px-5 py-8 pb-[calc(2rem+env(safe-area-inset-bottom))]">
           <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
 
             {/* Search header */}

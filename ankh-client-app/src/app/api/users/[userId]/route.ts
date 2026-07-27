@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
+import { getJwtSecret } from '@/lib/jwtSecret'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'
 
 const requireManager = (request: NextRequest) => {
   const authHeader = request.headers.get('authorization') || ''
@@ -14,7 +14,7 @@ const requireManager = (request: NextRequest) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
+    const decoded = jwt.verify(token, getJwtSecret()) as { role?: string }
     if (decoded.role !== 'MANAGER') {
       return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
     }

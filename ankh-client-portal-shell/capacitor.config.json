@@ -1,0 +1,28 @@
+{
+  "appId": "com.ankh.clientportal",
+  "appName": "Ankh Reservations",
+  "webDir": "www",
+  "server": {
+    "url": "https://ankh-client-record-db.vercel.app/en/client",
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": false,
+      "backgroundColor": "#fbfbfa",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#fbfbfa"
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

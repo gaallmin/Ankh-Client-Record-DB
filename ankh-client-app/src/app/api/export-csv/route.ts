@@ -35,6 +35,7 @@ export async function GET(_request: NextRequest) {
           },
           customerSymptoms: true,
           customerImprovements: true,
+          notes: true,
           status: true
         }
       }),
@@ -58,7 +59,8 @@ export async function GET(_request: NextRequest) {
       'Lesson Location',
       'Customer Improvements',
       'Lesson Content',
-      'Customer Feedback',
+      'Attendance Status',
+      'Special Notes / Requests',
       'Lesson Type',
       'Customer Symptoms',
       'Initial Symptom',
@@ -83,6 +85,7 @@ export async function GET(_request: NextRequest) {
         p.customerImprovements || '',
         p.lesson.lessonContent || '',
         p.status || '',
+        p.notes || '',
         p.lesson.lessonType || '',
         p.customerSymptoms || '',
         initialSymptomMap.get(p.customer.id) || '',

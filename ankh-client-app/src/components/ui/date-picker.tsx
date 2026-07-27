@@ -19,9 +19,10 @@ interface DatePickerProps {
   onDateChange: (date: Date | undefined) => void
   placeholder?: string
   className?: string
+  disabled?: React.ComponentProps<typeof Calendar>["disabled"]
 }
 
-export function DatePicker({ date, onDateChange, placeholder = "Pick a date", className }: DatePickerProps) {
+export function DatePicker({ date, onDateChange, placeholder = "Pick a date", className, disabled }: DatePickerProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -42,6 +43,7 @@ export function DatePicker({ date, onDateChange, placeholder = "Pick a date", cl
           mode="single"
           selected={date}
           onSelect={onDateChange}
+          disabled={disabled}
           initialFocus
         />
       </PopoverContent>

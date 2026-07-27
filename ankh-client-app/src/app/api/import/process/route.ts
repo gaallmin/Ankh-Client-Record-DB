@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@/generated/prisma'
+import { Prisma } from '@prisma/client'
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
 import { Client } from '@upstash/qstash'
 
@@ -15,7 +15,7 @@ type LessonRow = {
 }
 type ParticipantRow = {
   customerId: string; lessonId: string
-  customerSymptoms: string | null; customerImprovements: string | null; status: string
+  customerSymptoms: string | null; customerImprovements: string | null; notes: string | null; status: string
 }
 interface StoredData { lessons: LessonRow[]; participants: ParticipantRow[] }
 
@@ -115,7 +115,8 @@ async function handler(request: NextRequest) {
           lessonId: p.lessonId,
           customerSymptoms: p.customerSymptoms,
           customerImprovements: p.customerImprovements,
-          status: p.status || 'attended',
+          notes: p.notes,
+          status: 'attended',
         })),
         skipDuplicates: true,
       })
@@ -147,4 +148,9 @@ async function handler(request: NextRequest) {
   }
 }
 
-export const POST = verifySignatureAppRouter(handler)
+export async function POST(request: NextRequest) {
+  if (!process.env.QSTASH_CURRENT_SIGNING_KEY || !process.env.QSTASH_NEXT_SIGNING_KEY) {
+    return NextResponse.json({ error: 'QStash signing keys are not configured' }, { status: 503 })
+  }
+  return verifySignatureAppRouter(handler)(request)
+}

@@ -5,7 +5,7 @@ import {
   Search, Loader2, AlertCircle, Users, Plus, Download,
   Upload, LogIn, UserPlus, MapPin, Trash2, Settings,
   ChevronDown, ChevronUp, X, Eye, Edit3, BookOpen,
-  Activity, LogOut, Pencil
+  Activity, LogOut, Pencil, MoreHorizontal, CalendarClock
 } from 'lucide-react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -13,6 +13,8 @@ import LanguageSwitcher from '@/components/LanguageSwitcher'
 import Cookies from 'js-cookie'
 import React from 'react'
 import { UploadModal } from '@/components/UploadModal'
+import { useAndroidBackDismiss } from '@/hooks/useAndroidBackDismiss'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 
 // Helper: split "Full Name" → { firstName, lastName }
 const splitFullName = (fullName: string): { firstName: string; lastName: string } => {
@@ -45,7 +47,7 @@ interface CustomerLessonParticipant {
     instructor: { firstName: string; lastName: string }
     location?: { name: string }
   }
-  customerSymptoms?: string; customerImprovements?: string; status?: string
+  customerSymptoms?: string; customerImprovements?: string; notes?: string; status?: string
 }
 interface Customer {
   id: string; firstName: string; lastName: string; email: string
@@ -56,9 +58,10 @@ interface Customer {
 interface InstructorLesson {
   id: string; lessonType: string; lessonContent?: string; createdAt: string
   groupParticipantCount?: number | null; groupCompany?: string | null
+  groupCustomerChange?: string | null; groupNotes?: string | null
   location?: { name: string }
   lessonParticipants: {
-    id: string; customerSymptoms?: string; customerImprovements?: string; status?: string
+    id: string; customerSymptoms?: string; customerImprovements?: string; notes?: string; status?: string
     customer: { id: string; firstName: string; lastName: string; company?: string }
   }[]
 }
@@ -87,12 +90,13 @@ function ModalShell({ open, onClose, title, subtitle, wide, children }: {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
+  useAndroidBackDismiss(open, onClose)
   if (!open) return null
   return (
     <>
       <Overlay onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div className={`relative bg-white w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl`} onClick={e => e.stopPropagation()}>
+        <div className={`relative bg-white w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl pb-[env(safe-area-inset-bottom)] sm:pb-0`} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
             <div>
               <h2 className="text-base font-semibold text-gray-900">{title}</h2>
@@ -111,6 +115,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel }: {
   open: boolean; title: string; message: string; onConfirm: () => void; onCancel: () => void
 }) {
   const t = useTranslations()
+  useAndroidBackDismiss(open, onCancel)
   if (!open) return null
   return (
     <>
@@ -354,6 +359,7 @@ export default function HomePage() {
   const [locName, setLocName] = useState('')
   const [locLoading, setLocLoading] = useState(false)
   const [locError, setLocError] = useState('')
+  const [editingLocId, setEditingLocId] = useState<string | null>(null)
 
   // ── Upload modal ──
   const [uploadModal, setUploadModal] = useState(false)
@@ -361,7 +367,7 @@ export default function HomePage() {
   // ── Issue 3: Edit/Delete individual lesson records ──
   const [expandedLpId, setExpandedLpId] = useState<string | null>(null)
   const [editingLpId, setEditingLpId] = useState<string | null>(null)
-  const [editLpForm, setEditLpForm] = useState<{ symptoms: string; improvements: string }>({ symptoms: '', improvements: '' })
+  const [editLpForm, setEditLpForm] = useState<{ symptoms: string; improvements: string; notes: string }>({ symptoms: '', improvements: '', notes: '' })
   const [editLpLoading, setEditLpLoading] = useState(false)
 
   // ── Confirm / Toast ──
@@ -500,18 +506,28 @@ export default function HomePage() {
       setConfirm(null)
     }})
   }
-  const addLocation = async (e: React.FormEvent) => {
+  const openAddLocation = () => { setEditingLocId(null); setLocName(''); setLocError(''); setAddLocModal(true) }
+  const saveLocation = async (e: React.FormEvent) => {
     e.preventDefault(); setLocLoading(true); setLocError('')
+    const token = Cookies.get('jwt-token')
     try {
-      const r = await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: locName.trim() }) })
-      if (r.ok) { setAddLocModal(false); setLocName(''); flash('Location created!') } else { const d = await r.json(); setLocError(d.error || 'Failed.') }
+      const url = editingLocId ? `/api/locations/${editingLocId}` : '/api/locations'
+      const r = await fetch(url, {
+        method: editingLocId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: locName.trim() })
+      })
+      if (r.ok) {
+        setAddLocModal(false); setLocName(''); setEditingLocId(null)
+        flash(editingLocId ? t('HomePage.locationUpdated') : 'Location created!')
+      } else { const d = await r.json(); setLocError(d.error || 'Failed.') }
     } catch { setLocError('Unexpected error.') } finally { setLocLoading(false) }
   }
 
   // ── Issue 3: Lesson record edit/delete handlers ──
   const startEditLp = (lp: CustomerLessonParticipant) => {
     setEditingLpId(lp.id)
-    setEditLpForm({ symptoms: lp.customerSymptoms || '', improvements: lp.customerImprovements || '' })
+    setEditLpForm({ symptoms: lp.customerSymptoms || '', improvements: lp.customerImprovements || '', notes: lp.notes || '' })
   }
   const cancelEditLp = () => { setEditingLpId(null) }
   const saveLpEdit = async (lp: CustomerLessonParticipant) => {
@@ -521,7 +537,7 @@ export default function HomePage() {
       const r = await fetch(`/api/lessons/${lp.lesson.id}/participants/${detailModal?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ customerSymptoms: editLpForm.symptoms, customerImprovements: editLpForm.improvements })
+        body: JSON.stringify({ customerSymptoms: editLpForm.symptoms, customerImprovements: editLpForm.improvements, notes: editLpForm.notes })
       })
       if (r.ok) {
         setDetailModal(prev => {
@@ -530,7 +546,7 @@ export default function HomePage() {
             ...prev,
             lessonParticipants: prev.lessonParticipants?.map(p =>
               p.id === lp.id
-                ? { ...p, customerSymptoms: editLpForm.symptoms, customerImprovements: editLpForm.improvements }
+                ? { ...p, customerSymptoms: editLpForm.symptoms, customerImprovements: editLpForm.improvements, notes: editLpForm.notes }
                 : p
             )
           }
@@ -590,7 +606,7 @@ export default function HomePage() {
         <ConfirmDialog open={!!confirm} title={confirm?.title || ''} message={confirm?.message || ''} onConfirm={() => confirm?.fn()} onCancel={() => setConfirm(null)} />
 
         {/* ━━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40">
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
           <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg bg-gray-900 flex items-center justify-center flex-shrink-0">
@@ -626,7 +642,7 @@ export default function HomePage() {
         </header>
 
         {/* ━━━━ CONTENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        <main className="max-w-7xl mx-auto px-5 py-6">
+        <main className="max-w-7xl mx-auto px-5 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
 
           {/* Not logged in */}
           {!isLoggedIn && (
@@ -653,9 +669,14 @@ export default function HomePage() {
                     <p className="text-sm font-semibold text-blue-900">Instructor View</p>
                     <p className="text-xs text-blue-600 mt-0.5">You can add lesson records and search customers. Admin features are available to managers only.</p>
                   </div>
-                  <Btn onClick={() => router.push(`/${locale}/add-record`)} className="flex-shrink-0">
-                    <Plus className="w-3.5 h-3.5" />{t('HomePage.addNewRecord')}
-                  </Btn>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Btn variant="secondary" onClick={() => router.push(`/${locale}/ops-schedule`)}>
+                      <CalendarClock className="w-3.5 h-3.5" />{t('OpsSchedule.title')}
+                    </Btn>
+                    <Btn onClick={() => router.push(`/${locale}/add-record`)}>
+                      <Plus className="w-3.5 h-3.5" />{t('HomePage.addNewRecord')}
+                    </Btn>
+                  </div>
                 </div>
               )}
 
@@ -703,18 +724,55 @@ export default function HomePage() {
                       onClick={() => { const n = !showAllUsers; setShowAllUsers(n); if (n && !allUsers.length) fetchAllUsers() }}>
                       <Users className="w-3.5 h-3.5" />{t('HomePage.allUsersTitle')}
                     </Btn>
-                    <Btn variant="secondary" onClick={() => setAddUserModal(true)}>
-                      <UserPlus className="w-3.5 h-3.5" />{t('QuickActions.addUser')}
-                    </Btn>
-                    <Btn variant="secondary" onClick={() => setAddLocModal(true)}>
-                      <MapPin className="w-3.5 h-3.5" />{t('QuickActions.addLocation')}
-                    </Btn>
-                    <Btn variant="secondary" onClick={() => router.push(`/${locale}/manage-users`)}>
-                      <Settings className="w-3.5 h-3.5" />{t('HomePage.manageUsers')}
-                    </Btn>
-                    <Btn variant="secondary" onClick={() => router.push(`/${locale}/settings`)}>
-                      <Settings className="w-3.5 h-3.5" />{t('HomePage.settings')}
-                    </Btn>
+                    {/* Desktop/tablet: admin actions stay inline */}
+                    <div className="hidden sm:contents">
+                      <Btn variant="secondary" onClick={() => setAddUserModal(true)}>
+                        <UserPlus className="w-3.5 h-3.5" />{t('QuickActions.addUser')}
+                      </Btn>
+                      <Btn variant="secondary" onClick={openAddLocation}>
+                        <MapPin className="w-3.5 h-3.5" />{t('QuickActions.addLocation')}
+                      </Btn>
+                      <Btn variant="secondary" onClick={() => router.push(`/${locale}/manage-users`)}>
+                        <Settings className="w-3.5 h-3.5" />{t('HomePage.manageUsers')}
+                      </Btn>
+                      <Btn variant="secondary" onClick={() => router.push(`/${locale}/manage-locations`)}>
+                        <MapPin className="w-3.5 h-3.5" />{t('HomePage.manageLocations')}
+                      </Btn>
+                      <Btn variant="secondary" onClick={() => router.push(`/${locale}/ops-schedule`)}>
+                        <CalendarClock className="w-3.5 h-3.5" />{t('OpsSchedule.title')}
+                      </Btn>
+                      <Btn variant="secondary" onClick={() => router.push(`/${locale}/settings`)}>
+                        <Settings className="w-3.5 h-3.5" />{t('HomePage.settings')}
+                      </Btn>
+                    </div>
+                    {/* Phone widths: collapse the 4 admin-CRUD actions into a menu so Row 2 doesn't wrap to 3 rows */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="sm:hidden inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-xl transition-colors">
+                          <MoreHorizontal className="w-3.5 h-3.5" />{t('HomePage.adminLabel')}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-56 p-1.5">
+                        <button onClick={() => setAddUserModal(true)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <UserPlus className="w-4 h-4 text-gray-400" />{t('QuickActions.addUser')}
+                        </button>
+                        <button onClick={openAddLocation} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <MapPin className="w-4 h-4 text-gray-400" />{t('QuickActions.addLocation')}
+                        </button>
+                        <button onClick={() => router.push(`/${locale}/manage-users`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <Settings className="w-4 h-4 text-gray-400" />{t('HomePage.manageUsers')}
+                        </button>
+                        <button onClick={() => router.push(`/${locale}/manage-locations`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <MapPin className="w-4 h-4 text-gray-400" />{t('HomePage.manageLocations')}
+                        </button>
+                        <button onClick={() => router.push(`/${locale}/ops-schedule`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <CalendarClock className="w-4 h-4 text-gray-400" />{t('OpsSchedule.title')}
+                        </button>
+                        <button onClick={() => router.push(`/${locale}/settings`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <Settings className="w-4 h-4 text-gray-400" />{t('HomePage.settings')}
+                        </button>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 )}
               </div>
@@ -925,11 +983,12 @@ export default function HomePage() {
                                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                       <span className="text-xs font-semibold text-gray-800">{lp.lesson.createdAt ? new Date(lp.lesson.createdAt).toLocaleDateString() : '—'}</span>
                                       <Badge>{lp.lesson.lessonType}</Badge>
-                                      {lp.status && appSettings.showFeedbackBadge && <Badge variant={lp.status === 'attended' ? 'green' : 'amber'}>{lp.status}</Badge>}
+                                      {lp.notes && appSettings.showFeedbackBadge && <Badge variant="amber">{t('CustomerSearch.hasNotes')}</Badge>}
                                       <span className="text-xs text-gray-400 ml-auto">{formatName(lp.lesson.instructor.firstName, lp.lesson.instructor.lastName)}</span>
                                     </div>
                                     {lp.customerSymptoms && <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">{t('CustomerSearch.symptoms')}:</span> {lp.customerSymptoms}</p>}
                                     {lp.customerImprovements && <p className="text-xs text-gray-600 mt-0.5"><span className="font-semibold text-gray-700">{t('CustomerSearch.improvements')}:</span> {lp.customerImprovements}</p>}
+                                    {lp.notes && <p className="text-xs text-gray-600 mt-0.5"><span className="font-semibold text-gray-700">{t('CustomerSearch.notesLabel')}:</span> {lp.notes}</p>}
                                   </div>
                                 ))}
                               </div>
@@ -1088,7 +1147,7 @@ export default function HomePage() {
                                 <span className="text-sm font-semibold text-gray-900">{lp.lesson.createdAt ? new Date(lp.lesson.createdAt).toLocaleDateString() : '—'}</span>
                                 <Badge>{lp.lesson.lessonType}</Badge>
                                 {lp.lesson.location && <Badge variant="blue">{lp.lesson.location.name}</Badge>}
-                                {lp.status && appSettings.showFeedbackBadge && <Badge variant={lp.status === 'attended' ? 'green' : 'amber'}>{lp.status}</Badge>}
+                                {lp.notes && appSettings.showFeedbackBadge && <Badge variant="amber">{t('CustomerSearch.hasNotes')}</Badge>}
                               </div>
                               {!isExpanded && !isEditing && lp.customerSymptoms && (
                                 <p className="text-xs text-gray-400 truncate max-w-xs">{lp.customerSymptoms}</p>
@@ -1142,6 +1201,15 @@ export default function HomePage() {
                                       onChange={e => setEditLpForm(p => ({ ...p, improvements: e.target.value }))}
                                     />
                                   </div>
+                                  <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('CustomerSearch.notesLabel')}</label>
+                                    <textarea
+                                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                                      rows={2}
+                                      value={editLpForm.notes}
+                                      onChange={e => setEditLpForm(p => ({ ...p, notes: e.target.value }))}
+                                    />
+                                  </div>
                                   <div className="flex gap-2">
                                     <Btn variant="secondary" size="sm" onClick={() => { cancelEditLp(); setExpandedLpId(lp.id) }} disabled={editLpLoading}><X className="w-3 h-3" />{t('Common.cancel')}</Btn>
                                     <Btn size="sm" onClick={() => saveLpEdit(lp)} disabled={editLpLoading}>
@@ -1170,13 +1238,13 @@ export default function HomePage() {
                                       <p className="text-xs text-gray-700 mt-0.5">{lp.customerImprovements}</p>
                                     </div>
                                   )}
-                                  {lp.status && lp.status !== 'attended' && (
+                                  {lp.notes && (
                                     <div>
-                                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('CustomerSearch.feedback')}</span>
-                                      <p className="text-xs text-gray-700 mt-0.5">{lp.status}</p>
+                                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('CustomerSearch.notesLabel')}</span>
+                                      <p className="text-xs text-gray-700 mt-0.5">{lp.notes}</p>
                                     </div>
                                   )}
-                                  {!lp.lesson.lessonContent && !lp.customerSymptoms && !lp.customerImprovements && (
+                                  {!lp.lesson.lessonContent && !lp.customerSymptoms && !lp.customerImprovements && !lp.notes && (
                                     <p className="text-xs text-gray-400">No additional details recorded.</p>
                                   )}
                                 </div>
@@ -1235,12 +1303,32 @@ export default function HomePage() {
                       : `${lesson.lessonParticipants.length} participant${lesson.lessonParticipants.length !== 1 ? 's' : ''}`}
                   </span>
                 </div>
+                {lesson.lessonContent && (
+                  <div className="mt-2 pt-2 border-t border-gray-50">
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-0.5">{t('AddRecord.lessonContent')}</span>
+                    <span className="text-xs text-gray-600">{lesson.lessonContent}</span>
+                  </div>
+                )}
                 {lesson.lessonType === 'Group' ? (
-                  lesson.groupCompany && (
-                    <div className="mt-2 pt-2 border-t border-gray-50">
-                      <span className="text-xs text-gray-600">{lesson.groupCompany}</span>
-                    </div>
-                  )
+                  <>
+                    {lesson.groupCompany && (
+                      <div className="mt-2 pt-2 border-t border-gray-50">
+                        <span className="text-xs text-gray-600">{lesson.groupCompany}</span>
+                      </div>
+                    )}
+                    {lesson.groupCustomerChange && (
+                      <div className="mt-2 pt-2 border-t border-gray-50">
+                        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-0.5">{t('AddRecord.groupCustomerChangeLabel')}</span>
+                        <span className="text-xs text-gray-600">{lesson.groupCustomerChange}</span>
+                      </div>
+                    )}
+                    {lesson.groupNotes && (
+                      <div className="mt-2 pt-2 border-t border-gray-50">
+                        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-0.5">{t('AddRecord.groupNotesLabel')}</span>
+                        <span className="text-xs text-gray-600">{lesson.groupNotes}</span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   lesson.lessonParticipants.length > 0 && (
                     <div className="space-y-1 mt-2 pt-2 border-t border-gray-50">
@@ -1249,6 +1337,7 @@ export default function HomePage() {
                           <span className="font-medium text-gray-800">{formatName(lp.customer.firstName, lp.customer.lastName)}</span>
                           {lp.customer.company && <span className="text-gray-400">· {lp.customer.company}</span>}
                           {lp.customerSymptoms && <span className="text-gray-400 truncate max-w-xs">· {lp.customerSymptoms}</span>}
+                          {lp.notes && <span className="text-gray-400 truncate max-w-xs">· {lp.notes}</span>}
                         </div>
                       ))}
                     </div>
@@ -1295,12 +1384,12 @@ export default function HomePage() {
         </form>
       </ModalShell>
 
-      {/* Add location */}
-      <ModalShell open={addLocModal} onClose={() => setAddLocModal(false)} title={t('HomePage.addNewLocationTitle')}>
-        <form onSubmit={addLocation} className="space-y-4">
+      {/* Add / Edit location */}
+      <ModalShell open={addLocModal} onClose={() => setAddLocModal(false)} title={editingLocId ? t('HomePage.editLocationTitle') : t('HomePage.addNewLocationTitle')}>
+        <form onSubmit={saveLocation} className="space-y-4">
           <Field label={t('HomePage.locationName')} value={locName} onChange={e => setLocName(e.target.value)} placeholder={t('HomePage.locationNamePlaceholder')} required />
           {locError && <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3.5 py-2.5 rounded-xl"><AlertCircle className="w-4 h-4 flex-shrink-0" />{locError}</div>}
-          <Btn type="submit" disabled={locLoading} className="w-full justify-center !py-3">{locLoading ? <><Loader2 className="w-4 h-4 animate-spin" />{t('AddRecord.creating')}</> : t('HomePage.createLocation')}</Btn>
+          <Btn type="submit" disabled={locLoading} className="w-full justify-center !py-3">{locLoading ? <><Loader2 className="w-4 h-4 animate-spin" />{t('AddRecord.creating')}</> : editingLocId ? t('Common.save') : t('HomePage.createLocation')}</Btn>
         </form>
       </ModalShell>
 

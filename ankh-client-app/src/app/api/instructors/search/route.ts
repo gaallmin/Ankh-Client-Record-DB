@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     const instructors = await prisma.user.findMany({
       where: {
-        role: 'INSTRUCTOR',
+        role: { in: ['INSTRUCTOR', 'MANAGER'] },
         OR: [
           { firstName: { contains: name, mode: 'insensitive' } },
           { lastName: { contains: name, mode: 'insensitive' } },
