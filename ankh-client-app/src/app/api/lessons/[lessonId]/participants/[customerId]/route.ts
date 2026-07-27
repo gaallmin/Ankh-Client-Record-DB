@@ -1,53 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'
-
-const requireAuth = (request: NextRequest) => {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-
-  if (!token) {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
-    if (decoded.role !== 'MANAGER' && decoded.role !== 'INSTRUCTOR') {
-      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-    }
-    return { ok: true, role: decoded.role }
-  } catch {
-    return { error: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) }
-  }
-}
-
-const requireManager = (request: NextRequest) => {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-
-  if (!token) {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
-    if (decoded.role !== 'MANAGER') {
-      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-    }
-    return { ok: true }
-  } catch {
-    return { error: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) }
-  }
-}
+import { requireManager, requireStaff } from '@/lib/staffAuth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ lessonId: string; customerId: string }> }
 ) {
   try {
-    const auth = requireAuth(request)
+    const auth = requireStaff(request)
     if ('error' in auth) return auth.error
 
     const { lessonId, customerId } = await params
@@ -60,7 +20,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { customerSymptoms, customerImprovements, status } = body
+    const { customerSymptoms, customerImprovements, notes, status } = body
 
     const updatedParticipant = await prisma.lessonParticipant.update({
       where: {
@@ -72,6 +32,7 @@ export async function PUT(
       data: {
         ...(customerSymptoms !== undefined ? { customerSymptoms } : {}),
         ...(customerImprovements !== undefined ? { customerImprovements } : {}),
+        ...(notes !== undefined ? { notes } : {}),
         ...(status !== undefined ? { status } : {})
       }
     })

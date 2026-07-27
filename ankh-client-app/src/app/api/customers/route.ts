@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
 // Shared lightweight customer select - only what the list view needs.
 // Full lesson history is loaded on-demand via the customer detail endpoint.
@@ -35,6 +36,9 @@ const CUSTOMER_LIST_SELECT = {
 } as const
 
 export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
@@ -69,9 +73,8 @@ export async function GET(request: NextRequest) {
       { customers, total, page, limit, totalPages: Math.ceil(total / limit) },
       {
         headers: {
-          // Allow browsers/CDN to serve a slightly stale list for 10s
-          // while revalidating in the background — makes navigation instant.
-          'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
+          // Customer PII must never be stored by a shared browser/CDN cache.
+          'Cache-Control': 'private, no-store'
         }
       }
     )

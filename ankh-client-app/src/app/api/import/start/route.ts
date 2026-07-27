@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@/generated/prisma'
+import { Prisma } from '@prisma/client'
 import { Client } from '@upstash/qstash'
 import bcrypt from 'bcryptjs'
-import * as XLSX from 'xlsx'
+import { parseTabularFile } from '@/lib/tabularFile'
+import { requireManager } from '@/lib/staffAuth'
 
 const HEADER_MAP: Record<string, string> = {
   'customer id': 'customerId', 'customerid': 'customerId',
@@ -72,21 +73,21 @@ function rawToDatePart(val: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const ext = file.name.split('.').pop()?.toLowerCase()
-    if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
-      return NextResponse.json({ error: 'File must be CSV, XLSX, or XLS' }, { status: 400 })
+    if (!['csv', 'xlsx'].includes(ext || '')) {
+      return NextResponse.json({ error: 'File must be CSV or XLSX' }, { status: 400 })
     }
 
     // ── 1. Parse file ─────────────────────────────────────────────────────────
-    const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
-    const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { raw: true })
+    const rawRows = await parseTabularFile(file)
 
     if (rawRows.length === 0) return NextResponse.json({ error: 'File is empty' }, { status: 400 })
 
@@ -341,7 +342,7 @@ export async function POST(request: NextRequest) {
 
     // Build minimal lesson rows (only what DB needs, no text content)
     type LessonRow = { id: string; lessonType: string; lessonContent: string | null; instructorId: string; locationId: string; createdAt?: Date }
-    type ParticipantRow = { customerId: string; lessonId: string; customerSymptoms: string | null; customerImprovements: string | null; status: string }
+    type ParticipantRow = { customerId: string; lessonId: string; customerSymptoms: string | null; customerImprovements: string | null; notes: string | null; status: string }
 
     const lessonRows: LessonRow[] = []
     const seenLessons = new Set<string>()
@@ -371,7 +372,8 @@ export async function POST(request: NextRequest) {
         lessonId: row.lessonId,
         customerSymptoms: row.customerSymptoms || row.initialSymptom,
         customerImprovements: row.customerImprovements,
-        status: row.customerFeedback || 'attended',
+        notes: row.customerFeedback || null,
+        status: 'attended',
       })
     }
 

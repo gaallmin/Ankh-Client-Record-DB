@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireManager, requireStaff } from '@/lib/staffAuth'
 
 export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { searchParams } = new URL(request.url)
     const nameFilter = searchParams.get('search')
 
     const locations = await prisma.location.findMany({
-      where: nameFilter ? { name: { contains: nameFilter, mode: 'insensitive' } } : {},
+      where: {
+        deletedAt: null,
+        ...(nameFilter ? { name: { contains: nameFilter, mode: 'insensitive' } } : {})
+      },
       select: { id: true, name: true, createdAt: true },
       orderBy: { name: 'asc' }
     })
@@ -16,9 +23,8 @@ export async function GET(request: NextRequest) {
       { locations },
       {
         headers: {
-          // Locations change very rarely — cache aggressively.
-          // 60s fresh, then serve stale for up to 5 minutes while revalidating.
-          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+          // Keep all staff API responses out of shared CDN caches.
+          'Cache-Control': 'private, no-store'
         }
       }
     )
@@ -33,6 +39,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = requireManager(request)
+    if ('error' in auth) return auth.error
+
     const { name } = await request.json()
 
     if (!name || name.trim().length === 0) {
@@ -42,8 +51,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const existingLocation = await prisma.location.findUnique({
-      where: { name: name.trim() }
+    const existingLocation = await prisma.location.findFirst({
+      where: { name: name.trim(), deletedAt: null }
     })
 
     if (existingLocation) {

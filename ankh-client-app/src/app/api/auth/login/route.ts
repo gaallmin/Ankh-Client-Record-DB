@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
-// 🔑 NEW: Retrieve your secret key from environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'; 
+import { getJwtSecret } from '@/lib/jwtSecret'
+import { setStaffSessionCookie } from '@/lib/staffAuth'
+import { clientIp, rateLimit } from '@/lib/rateLimit'
 
 export async function POST(request: NextRequest) {
   try {
+    if (!rateLimit(`staff-login:${clientIp(request)}`, 10, 15 * 60 * 1000)) {
+      return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429 })
+    }
+
     const { username, password } = await request.json()
 
     // Validate input
@@ -20,6 +25,7 @@ export async function POST(request: NextRequest) {
     // Find user by username or email (instructors imported from Excel have auto-generated usernames)
     const user = await prisma.user.findFirst({
       where: {
+        isActive: true,
         OR: [{ username }, { email: username }]
       },
       select: {
@@ -50,16 +56,24 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = { userId: user.id, username: user.username, role: user.role }
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' })
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '1d', audience: 'staff' })
 
     // Return user data (excluding password)
-    const { password: _, ...userData } = user
+    const userData = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+    }
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: 'Login successful',
       user: userData,
-      token
     }, { status: 200 })
+    setStaffSessionCookie(response, token)
+    return response
 
   } catch (error) {
     console.error('Login error:', error)

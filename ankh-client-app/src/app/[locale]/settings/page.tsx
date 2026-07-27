@@ -178,13 +178,16 @@ export default function SettingsPage() {
   const [instrDirty, setInstrDirty] = useState(false)
 
   useEffect(() => {
-    const token = Cookies.get('jwt-token')
-    if (!token) { router.push(`/${locale}`); return }
-    loadAll(token)
+    fetch('/api/auth/me', { cache: 'no-store' }).then(async response => {
+      if (!response.ok) { router.replace(`/${locale}`); return }
+      const data = await response.json()
+      if (data.user?.role !== 'MANAGER') { router.replace(`/${locale}`); return }
+      loadAll()
+    }).catch(() => router.replace(`/${locale}`))
   }, [])
 
-  const loadAll = async (token: string) => {
-    await Promise.all([loadSettings(), loadInstructors(token)])
+  const loadAll = async () => {
+    await Promise.all([loadSettings(), loadInstructors()])
   }
 
   const loadSettings = async () => {
@@ -200,10 +203,10 @@ export default function SettingsPage() {
     }
   }
 
-  const loadInstructors = async (token: string) => {
+  const loadInstructors = async () => {
     setInstrLoading(true); setInstrLoadError(null)
     try {
-      const r = await fetch('/api/users/instructor-visibility', { headers: { Authorization: `Bearer ${token}` } })
+      const r = await fetch('/api/users/instructor-visibility')
       if (!r.ok) { setInstrLoadError('Failed to load instructors.'); return }
       const data = await r.json()
       const list: Instructor[] = data.instructors || []
@@ -225,11 +228,10 @@ export default function SettingsPage() {
 
   const saveSettings = async () => {
     setSettingsSaving(true); setSettingsSaveOk(false); setSettingsSaveErr(null)
-    const token = Cookies.get('jwt-token')
     try {
       const r = await fetch('/api/settings', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: appSettings })
       })
       if (!r.ok) { const d = await r.json(); setSettingsSaveErr(d.error || 'Failed to save.'); return }
@@ -257,12 +259,11 @@ export default function SettingsPage() {
 
   const saveInstructors = async () => {
     setInstrSaving(true); setInstrSaveOk(false); setInstrSaveErr(null)
-    const token = Cookies.get('jwt-token')
     try {
       const updates = instructors.map(i => ({ id: i.id, isActive: filterEnabled ? activeIds.has(i.id) : true }))
       const r = await fetch('/api/users/instructor-visibility', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates })
       })
       if (!r.ok) { const d = await r.json(); setInstrSaveErr(d.error || 'Failed to save.'); return }
@@ -294,7 +295,7 @@ export default function SettingsPage() {
 
       <div className="min-h-screen bg-[#f7f7f5]">
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40">
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
             <button onClick={() => router.push(`/${locale}`)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
               <ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Back</span>
@@ -308,7 +309,7 @@ export default function SettingsPage() {
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 fade">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(2rem+env(safe-area-inset-bottom))] fade">
           <div className="mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h2>
             <p className="text-xs sm:text-sm text-gray-400 mt-1">ADMIN / MANAGER ONLY — Configure app visibility and preferences</p>

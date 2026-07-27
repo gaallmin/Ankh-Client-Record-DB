@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
+import { requireManager, requireStaff } from '@/lib/staffAuth'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only'
 
 export const DEFAULT_SETTINGS = {
   // User Experience
@@ -19,12 +18,15 @@ export const DEFAULT_SETTINGS = {
 
 export type AppSettingsData = typeof DEFAULT_SETTINGS
 
-// GET — public, no auth required (settings need to be readable by all logged-in users)
-export async function GET() {
+// GET — staff only. These settings control staff-only application behaviour.
+export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const row = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
     const settings = row ? { ...DEFAULT_SETTINGS, ...(row.settings as object) } : DEFAULT_SETTINGS
-    return NextResponse.json({ settings })
+    return NextResponse.json({ settings }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Error fetching settings:', error)
     return NextResponse.json({ settings: DEFAULT_SETTINGS })
@@ -33,15 +35,8 @@ export async function GET() {
 
 // PATCH — manager only
 export async function PATCH(request: NextRequest) {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string }
-    if (decoded.role !== 'MANAGER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  } catch {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-  }
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
 
   try {
     const { settings } = await request.json()

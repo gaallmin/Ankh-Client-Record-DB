@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireManager } from '@/lib/staffAuth'
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   const { jobId } = await params
 
   if (!jobId) {

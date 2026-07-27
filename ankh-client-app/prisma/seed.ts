@@ -1,4 +1,4 @@
-import { PrismaClient } from '../src/generated/prisma'
+import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -26,8 +26,8 @@ async function main() {
     process.exit(1)
   }
 
-  if (password.length < 6) {
-    console.error('❌ Password must be at least 6 characters long')
+  if (password.length < 12) {
+    console.error('❌ Password must be at least 12 characters long')
     process.exit(1)
   }
 

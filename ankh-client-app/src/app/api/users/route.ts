@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { requireManager } from '@/lib/staffAuth'
 
 export async function POST(request: NextRequest) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { username, password, role, firstName, lastName, email } = await request.json()
 
@@ -86,6 +90,9 @@ export async function POST(request: NextRequest) {
 
 // GET route to fetch all users (for management purposes)
 export async function GET(request: NextRequest) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');

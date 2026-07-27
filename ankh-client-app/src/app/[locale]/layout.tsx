@@ -1,18 +1,18 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Viewport } from "next";
 import "./globals.css";
 import {NextIntlClientProvider} from 'next-intl';
 import {getMessages} from 'next-intl/server';
 import {locales} from '@/i18n';
+import CapacitorBridge from '@/components/CapacitorBridge';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
+};
 
 export function generateStaticParams() {
   return locales.map((locale) => ({locale}));
@@ -40,10 +40,11 @@ export default async function RootLayout({
   return (
     <html lang={locale} translate="no">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className="antialiased"
         suppressHydrationWarning={true}
       >
         <NextIntlClientProvider messages={messages}>
+          <CapacitorBridge />
           {children}
         </NextIntlClientProvider>
       </body>

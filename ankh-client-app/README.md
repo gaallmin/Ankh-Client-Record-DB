@@ -11,6 +11,19 @@ A production-grade, multi-language client management system for wellness studios
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?style=flat-square&logo=postgresql)](https://supabase.com)
 [![Vercel](https://img.shields.io/badge/Deployed-Vercel-black?style=flat-square&logo=vercel)](https://vercel.com)
 
+> **2026-07 additions — reservations, client app & notifications:** 30-minute
+> scheduling, native push notifications (FCM/APNs with mock/live providers), a
+> separate client-facing reservation app at `/[locale]/client` with its own
+> native shell (`../ankh-client-portal-shell`, app id `com.ankh.clientportal`),
+> client accounts staff-linked to existing customer records, and waitlist
+> promotion with automatic push notification. Local dev, notification/push
+> setup, Android/iOS build steps, and release limitations:
+> **[docs/RESERVATIONS_AND_CLIENT_APP.md](docs/RESERVATIONS_AND_CLIENT_APP.md)**
+>
+> Production release order, environment variables, database backup/migration,
+> Vercel, push, Android/iOS signing, store submission, rollback, and go-live
+> gates: **[docs/DEPLOYMENT_MANUAL.md](docs/DEPLOYMENT_MANUAL.md)**
+
 ---
 
 ## Table of Contents

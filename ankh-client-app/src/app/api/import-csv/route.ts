@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import * as XLSX from 'xlsx'
 import bcrypt from 'bcryptjs'
+import { parseTabularFile } from '@/lib/tabularFile'
+import { randomBytes } from 'node:crypto'
+import { requireManager } from '@/lib/staffAuth'
 
-const DEFAULT_PASSWORD = 'Pw@123'
 const BATCH_SIZE = 5000 // Increased batch size
 
 // Required headers (canonical, case-insensitive)
@@ -119,6 +120,9 @@ const parseLessonDate = (value: string): Date | null => {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File
@@ -132,46 +136,16 @@ export async function POST(request: NextRequest) {
 
     const fileName = file.name.toLowerCase()
     const isCSV = fileName.endsWith('.csv')
-    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls')
+    const isExcel = fileName.endsWith('.xlsx')
 
     if (!isCSV && !isExcel) {
       return NextResponse.json(
-        { error: 'File must be CSV (.csv) or Excel (.xlsx, .xls) format' },
+        { error: 'File must be CSV (.csv) or Excel (.xlsx) format' },
         { status: 400 }
       )
     }
 
-    const fileBuffer = await file.arrayBuffer()
-    const uint8Array = new Uint8Array(fileBuffer)
-
-    let data: Record<string, any>[] = []
-
-    if (isExcel) {
-      const workbook = XLSX.read(uint8Array, { type: 'array' })
-      const sheetName = workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[sheetName]
-      data = XLSX.utils.sheet_to_json(worksheet, { defval: '' }) as Record<string, any>[]
-    } else {
-      const fileContent = await file.text()
-      const lines = fileContent.split(/\r?\n/).filter(line => line.trim())
-
-      if (lines.length < 2) {
-        return NextResponse.json(
-          { error: 'File must have headers and at least one data row' },
-          { status: 400 }
-        )
-      }
-
-      const headers = lines[0].split(',').map(h => h.trim())
-      data = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim())
-        const row: Record<string, string> = {}
-        headers.forEach((header, index) => {
-          row[header] = values[index] || ''
-        })
-        return row
-      })
-    }
+    const data = await parseTabularFile(file) as Record<string, any>[]
 
     if (!data || data.length === 0) {
       return NextResponse.json(
@@ -350,19 +324,19 @@ export async function POST(request: NextRequest) {
         .filter(i => !existingInstructorEmailSet.has(i.email))
       
       if (missingInstructors.length > 0) {
-        const hashedDefaultPassword = await bcrypt.hash(DEFAULT_PASSWORD, 10)
+        const newInstructorData = await Promise.all(missingInstructors.map(async (instructor) => {
+          const [firstName, ...rest] = instructor.name.split(' ')
+          return {
+            username: buildInstructorUsername(instructor.name),
+            password: await bcrypt.hash(randomBytes(32).toString('base64url'), 10),
+            role: 'INSTRUCTOR' as const,
+            firstName: firstName || '',
+            lastName: rest.join(' ') || '',
+            email: instructor.email
+          }
+        }))
         await prisma.user.createMany({
-          data: missingInstructors.map(instructor => {
-            const [firstName, ...rest] = instructor.name.split(' ')
-            return {
-              username: buildInstructorUsername(instructor.name),
-              password: hashedDefaultPassword,
-              role: 'INSTRUCTOR',
-              firstName: firstName || '',
-              lastName: rest.join(' ') || '',
-              email: instructor.email
-            }
-          }),
+          data: newInstructorData,
           skipDuplicates: true
         })
       }

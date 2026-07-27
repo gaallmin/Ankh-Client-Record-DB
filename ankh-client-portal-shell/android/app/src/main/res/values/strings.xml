@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ankh Reservations</string>
+    <string name="title_activity_main">Ankh Reservations</string>
+    <string name="package_name">com.ankh.clientportal</string>
+    <string name="custom_url_scheme">com.ankh.clientportal</string>
+</resources>
