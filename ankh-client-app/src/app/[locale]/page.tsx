@@ -5,7 +5,7 @@ import {
   Search, Loader2, AlertCircle, Users, Plus, Download,
   Upload, LogIn, UserPlus, MapPin, Trash2, Settings,
   ChevronDown, ChevronUp, X, Eye, Edit3, BookOpen,
-  Activity, LogOut, Pencil, MoreHorizontal, CalendarClock
+  Activity, LogOut, Pencil, MoreHorizontal, CalendarClock, BarChart3
 } from 'lucide-react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -752,6 +752,9 @@ export default function HomePage() {
                       <Btn variant="secondary" onClick={() => router.push(`/${locale}/ops-schedule`)}>
                         <CalendarClock className="w-3.5 h-3.5" />{t('OpsSchedule.title')}
                       </Btn>
+                      <Btn variant="secondary" onClick={() => router.push(`/${locale}/analytics`)}>
+                        <BarChart3 className="w-3.5 h-3.5" />{t('AnalyticsDashboard.title')}
+                      </Btn>
                       <Btn variant="secondary" onClick={() => router.push(`/${locale}/settings`)}>
                         <Settings className="w-3.5 h-3.5" />{t('HomePage.settings')}
                       </Btn>
@@ -778,6 +781,9 @@ export default function HomePage() {
                         </button>
                         <button onClick={() => router.push(`/${locale}/ops-schedule`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
                           <CalendarClock className="w-4 h-4 text-gray-400" />{t('OpsSchedule.title')}
+                        </button>
+                        <button onClick={() => router.push(`/${locale}/analytics`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                          <BarChart3 className="w-4 h-4 text-gray-400" />{t('AnalyticsDashboard.title')}
                         </button>
                         <button onClick={() => router.push(`/${locale}/settings`)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-left">
                           <Settings className="w-4 h-4 text-gray-400" />{t('HomePage.settings')}
