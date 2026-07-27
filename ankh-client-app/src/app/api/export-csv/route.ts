@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
 const csvEscape = (value: unknown) => {
   const s = (value ?? '').toString()
@@ -8,8 +9,19 @@ const csvEscape = (value: unknown) => {
   return s
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
+    if (auth.role === 'INSTRUCTOR') {
+      const row = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
+      const settings = row?.settings as { allowInstructorExport?: boolean } | null
+      if (settings?.allowInstructorExport === false) {
+        return NextResponse.json({ error: 'Export is disabled for instructors' }, { status: 403 })
+      }
+    }
+
     const [lessonParticipants, initialSymptomRecords] = await Promise.all([
       prisma.lessonParticipant.findMany({
         where: { customer: { deletedAt: null } },
@@ -103,6 +115,7 @@ export async function GET(_request: NextRequest) {
       'Content-Disposition',
       'attachment; filename="customer_records.csv"'
     )
+    response.headers.set('Cache-Control', 'private, no-store')
     return response
 
   } catch (error) {

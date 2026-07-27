@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const instructors = await prisma.user.findMany({
-      where: { role: { in: ['INSTRUCTOR', 'MANAGER'] }, isActive: true },
+      where: { role: 'INSTRUCTOR', isActive: true },
       select: {
         id: true,
         firstName: true,
@@ -24,9 +28,8 @@ export async function GET(_request: NextRequest) {
     )
   } catch (error) {
     console.error('Error fetching instructors:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return NextResponse.json(
-      { error: 'Failed to fetch instructors', details: errorMessage, results: [] },
+      { error: 'Failed to fetch instructors', results: [] },
       { status: 500 }
     )
   }

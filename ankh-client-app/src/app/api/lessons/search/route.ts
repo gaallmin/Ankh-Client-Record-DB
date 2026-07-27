@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
 export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
 
     const { searchParams } = new URL(request.url)

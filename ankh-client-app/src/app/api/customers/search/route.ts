@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
 // Maximum lessons returned in search results list.
 // Full history is loaded on-demand when the customer detail modal opens.
 const SEARCH_LESSON_PREVIEW_LIMIT = 5
 
 export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { searchParams } = new URL(request.url)
     const name = searchParams.get('name')
@@ -75,7 +79,7 @@ export async function GET(request: NextRequest) {
       message: customers.length === 0 ? 'No customers found' : 'Customers found',
       customers,
       total
-    })
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Customer search error:', error)
     return NextResponse.json(

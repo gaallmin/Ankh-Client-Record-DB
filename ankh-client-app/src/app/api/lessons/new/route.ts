@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
 export async function POST(request: NextRequest) {
+    const auth = requireStaff(request)
+    if ('error' in auth) return auth.error
 
     const requestBody = await request.json();
-    console.log('Incoming request payload:', requestBody);
 
     const {
         lessonType,

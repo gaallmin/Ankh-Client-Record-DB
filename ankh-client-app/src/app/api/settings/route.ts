@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireManager } from '@/lib/staffAuth'
+import { requireManager, requireStaff } from '@/lib/staffAuth'
 
 
 export const DEFAULT_SETTINGS = {
@@ -18,12 +18,15 @@ export const DEFAULT_SETTINGS = {
 
 export type AppSettingsData = typeof DEFAULT_SETTINGS
 
-// GET — public, no auth required (settings need to be readable by all logged-in users)
-export async function GET() {
+// GET — staff only. These settings control staff-only application behaviour.
+export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const row = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
     const settings = row ? { ...DEFAULT_SETTINGS, ...(row.settings as object) } : DEFAULT_SETTINGS
-    return NextResponse.json({ settings })
+    return NextResponse.json({ settings }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Error fetching settings:', error)
     return NextResponse.json({ settings: DEFAULT_SETTINGS })

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:integration": "vitest run src/integration --reporter=verbose",
+    "db:staging:guard": "node scripts/assert-staging-database.mjs",
     "sync:native": "cap sync",
     "open:android": "cap open android",
     "open:ios": "cap open ios",

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireManager } from '@/lib/staffAuth'
+import { requireManager, requireStaff } from '@/lib/staffAuth'
 
 export async function GET(request: NextRequest) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { searchParams } = new URL(request.url)
     const nameFilter = searchParams.get('search')
@@ -20,9 +23,8 @@ export async function GET(request: NextRequest) {
       { locations },
       {
         headers: {
-          // Locations change very rarely — cache aggressively.
-          // 60s fresh, then serve stale for up to 5 minutes while revalidating.
-          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+          // Keep all staff API responses out of shared CDN caches.
+          'Cache-Control': 'private, no-store'
         }
       }
     )

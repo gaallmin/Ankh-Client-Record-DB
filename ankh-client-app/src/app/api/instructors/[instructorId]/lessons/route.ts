@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireStaff } from '@/lib/staffAuth'
 
 // GET /api/instructors/[instructorId]/lessons
 // Returns all lessons taught by a specific instructor (as primary or additional instructor).
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ instructorId: string }> }
 ) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { instructorId } = await params
 

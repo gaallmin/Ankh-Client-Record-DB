@@ -16,7 +16,6 @@ The native apps are Capacitor WebView shells that load the deployed Vercel app. 
 
 Do not treat the current repository as ready for an unrestricted public production launch until the following items are closed and evidenced:
 
-- Complete the remaining API authorization audit. Some legacy staff/data routes still do not enforce staff authentication, including customer/user/export/import surfaces. The client route must remain public, but staff data routes must not.
 - Implement client-account deletion in the app and on the web. Both Apple and Google require a deletion path when an app permits account creation.
 - Publish a privacy policy and complete Apple App Privacy and Google Play Data Safety declarations. The app processes identity, contact, lesson, symptom/improvement, reservation, and device-token data.
 - Change `android:allowBackup="true"` to an approved secure backup policy for both Android apps. For this type of personal/health-adjacent data, the recommended default is `false` unless encrypted backup behavior is explicitly designed and reviewed.
@@ -24,10 +23,9 @@ Do not treat the current repository as ready for an unrestricted public producti
 - Configure private Android upload keys and Apple signing teams/profiles. The repository does not contain release signing material, intentionally.
 - Increment both apps from the current `1.0 (1)` version before every subsequent store upload.
 - Run all migrations against a restored production backup or Supabase duplicate before production. The instructor-role migration deliberately fails if a manager is assigned to a lesson; the interval constraint fails if confirmed reservations overlap.
-- Move/fix the migration workflow before relying on it. It currently lives at `ankh-client-app/.github/workflows/prisma-migrate.yml`; GitHub only discovers workflows under the repository-root `.github/workflows/`. It also needs `working-directory: ankh-client-app` (or equivalent) for `npm ci` and Prisma commands.
 - Test iOS review suitability. Both apps are remote web wrappers; Apple App Review Guideline 4.2 requires functionality and UX beyond a repackaged website. Native push, device integration, polished offline/error handling, and clear utility must be demonstrated in review notes.
 
-For an internal web pilot, close at minimum the authorization, database backup/migration, secret, and real-environment smoke-test items. Store submission additionally requires all mobile signing, privacy, deletion, push, metadata, and review items.
+For an internal web pilot, keep the authorization regression suite green and close at minimum the isolated staging database migration, secret, and real-environment smoke-test items. Store submission additionally requires all mobile signing, privacy, deletion, push, metadata, and review items.
 
 ## 2. Release ownership and accounts
 
@@ -244,7 +242,7 @@ Verify row counts, create/confirm/cancel a reservation, and confirm two concurre
 
 ### 6.4 Apply production migrations
 
-Use CI/CD after fixing the workflow location and working directory. Prisma recommends `migrate deploy` in CI rather than from a developer laptop.
+Use the repository-root **Migrate and Test Staging Database** workflow for staging. It verifies that the staging and production Supabase project references differ, applies migrations, and runs the database integration suite. Keep production migration as a separately approved release operation. Prisma recommends `migrate deploy` in CI rather than from a developer laptop.
 
 If an approved emergency manual run is necessary:
 
@@ -330,7 +328,7 @@ Test both `/en` and `/ko` on desktop and mobile widths:
 - QStash processes a small import to completion and rejects an invalid signature.
 - Vercel function logs contain no secret values, full tokens, or unexpected database errors.
 
-The public `/api/health/db` route currently returns a user count and may return a raw database error message. Protect or remove it before public production; do not use it as a permanent unauthenticated monitoring endpoint in its current form.
+`/api/health/db` is manager-protected and returns only generic availability state. Configure a separate authenticated monitoring mechanism rather than weakening this route for public probes.
 
 ## 9. Push notification setup
 

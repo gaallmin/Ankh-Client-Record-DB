@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import { Client } from '@upstash/qstash'
 import bcrypt from 'bcryptjs'
 import { parseTabularFile } from '@/lib/tabularFile'
+import { requireManager } from '@/lib/staffAuth'
 
 const HEADER_MAP: Record<string, string> = {
   'customer id': 'customerId', 'customerid': 'customerId',
@@ -72,6 +73,9 @@ function rawToDatePart(val: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null

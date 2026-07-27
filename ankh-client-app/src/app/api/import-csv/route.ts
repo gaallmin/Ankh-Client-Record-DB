@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { parseTabularFile } from '@/lib/tabularFile'
 import { randomBytes } from 'node:crypto'
+import { requireManager } from '@/lib/staffAuth'
 
 const BATCH_SIZE = 5000 // Increased batch size
 
@@ -119,6 +120,9 @@ const parseLessonDate = (value: string): Date | null => {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = requireManager(request)
+  if ('error' in auth) return auth.error
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File
