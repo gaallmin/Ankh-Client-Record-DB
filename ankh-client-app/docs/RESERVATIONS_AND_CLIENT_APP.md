@@ -65,9 +65,11 @@ and confirmed instructor overlap is also rejected atomically by PostgreSQL.
 
 - Missing, weak, or placeholder `JWT_SECRET` values fail closed.
 - Staff and client tokens use separate JWT audiences.
+- Staff sessions are stored in Secure, SameSite=Strict, HttpOnly cookies. The
+  login response does not return the staff JWT to browser JavaScript.
 - Client sessions are stored in Secure, SameSite=Strict, HttpOnly cookies.
-- Client API calls use cookie credentials; client tokens are never written to
-  localStorage.
+- Browser API calls use cookie credentials; staff and client tokens are never
+  written to localStorage.
 
 ## Push delivery
 
@@ -82,16 +84,23 @@ and confirmed instructor overlap is also rejected atomically by PostgreSQL.
 
 External setup still required:
 
-1. Register both Android package IDs in Firebase and place each app's
-   `google-services.json` in its own `android/app/` directory.
-2. Register both iOS bundle IDs in the Apple Developer portal with Push
+1. Register the client Android package (`com.ankh.clientportal`) in Firebase
+   and place its `google-services.json` in
+   `ankh-client-portal-shell/android/app/`. The staff UI does not currently
+   register a push token; only add its Firebase app if staff push is
+   implemented later.
+2. Register the client iOS bundle ID in the Apple Developer portal with Push
    Notifications enabled. The checked-in Xcode projects include Debug and
-   Release APNs entitlements.
+   Release APNs entitlements; the staff entitlement must either be enabled for
+   its App ID or removed in a reviewed change when staff push is not used.
 3. Configure `FCM_SERVICE_ACCOUNT_JSON`, `APNS_TEAM_ID`, `APNS_KEY_ID`,
    `APNS_BUNDLE_ID_CLIENT`, and `APNS_PRIVATE_KEY` on the server, then set
    `NOTIFICATIONS_MODE=live`.
 4. Test real-device registration and delivery in both APNs sandbox/production
    and FCM before store submission.
+
+See `docs/DEPLOYMENT_MANUAL.md` for the complete release runbook and current
+public-launch blockers.
 
 ## Builds
 

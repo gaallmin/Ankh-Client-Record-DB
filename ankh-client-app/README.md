@@ -16,9 +16,13 @@ A production-grade, multi-language client management system for wellness studios
 > separate client-facing reservation app at `/[locale]/client` with its own
 > native shell (`../ankh-client-portal-shell`, app id `com.ankh.clientportal`),
 > client accounts staff-linked to existing customer records, and waitlist
-> promotion with automatic phone notification. Local dev, notification/push
+> promotion with automatic push notification. Local dev, notification/push
 > setup, Android/iOS build steps, and release limitations:
 > **[docs/RESERVATIONS_AND_CLIENT_APP.md](docs/RESERVATIONS_AND_CLIENT_APP.md)**
+>
+> Production release order, environment variables, database backup/migration,
+> Vercel, push, Android/iOS signing, store submission, rollback, and go-live
+> gates: **[docs/DEPLOYMENT_MANUAL.md](docs/DEPLOYMENT_MANUAL.md)**
 
 ---
 
