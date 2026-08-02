@@ -404,7 +404,11 @@ export default function HomePage() {
     if (debounced.length < 2) { setResults([]); setTotal(0); return }
     setSLoading(true); setSError(false)
     fetch(`/api/customers/search?name=${encodeURIComponent(debounced)}&take=${PAGE}&skip=${(searchPage - 1) * PAGE}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (r.status === 401) { setCurrentUser(null); setIsLoggedIn(false) }
+        if (!r.ok) throw new Error(`Customer search failed (${r.status})`)
+        return r.json()
+      })
       .then(d => { setResults(d.customers || []); setTotal(d.total || 0) })
       .catch(() => setSError(true))
       .finally(() => setSLoading(false))
@@ -450,7 +454,13 @@ export default function HomePage() {
     setDetailLoading(true)
     const preview = allCustomers.find(c => c.id === id) || results.find(c => c.id === id) || null
     setDetailModal(preview)
-    try { const r = await fetch(`/api/customers/${id}`); if (r.ok) { const d = await r.json(); setDetailModal(d.customer) } } finally { setDetailLoading(false) }
+    try {
+      const r = await fetch(`/api/customers/${id}`)
+      if (r.status === 401) { setCurrentUser(null); setIsLoggedIn(false) }
+      if (!r.ok) { flash(t('HomePage.searchFailedCustomer')); return }
+      const d = await r.json()
+      setDetailModal(d.customer)
+    } finally { setDetailLoading(false) }
   }
 
   // ── Handlers ──

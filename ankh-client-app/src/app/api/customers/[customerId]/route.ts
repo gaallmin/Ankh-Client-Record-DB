@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireManager } from '@/lib/staffAuth'
+import { requireManager, requireStaff } from '@/lib/staffAuth'
 
 // GET /api/customers/[customerId]
 // Returns the full customer record including ALL lesson history.
 // This is intentionally the "expensive" endpoint — it's only called when
 // the user opens the customer detail modal, not on every list render.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ customerId: string }> }
 ) {
+  const auth = requireStaff(request)
+  if ('error' in auth) return auth.error
+
   try {
     const { customerId } = await params
 
@@ -60,7 +63,7 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ customer })
+    return NextResponse.json({ customer }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Error fetching customer:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

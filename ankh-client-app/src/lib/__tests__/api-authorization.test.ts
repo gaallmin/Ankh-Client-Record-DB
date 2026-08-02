@@ -5,6 +5,7 @@ import { STAFF_SESSION_COOKIE } from '@/lib/staffAuth'
 import { GET as getUsers, POST as createUser } from '@/app/api/users/route'
 import { GET as getCustomers } from '@/app/api/customers/route'
 import { GET as searchCustomers } from '@/app/api/customers/search/route'
+import { GET as getCustomer } from '@/app/api/customers/[customerId]/route'
 import { GET as exportCsv } from '@/app/api/export-csv/route'
 import { GET as databaseHealth } from '@/app/api/health/db/route'
 import { POST as startImport } from '@/app/api/import/start/route'
@@ -36,6 +37,12 @@ const protectedRoutes: Array<{ name: string; invoke: () => Promise<Response> }> 
   { name: 'POST /api/users', invoke: () => createUser(request('/api/users', 'POST')) },
   { name: 'GET /api/customers', invoke: () => getCustomers(request('/api/customers')) },
   { name: 'GET /api/customers/search', invoke: () => searchCustomers(request('/api/customers/search?name=a')) },
+  {
+    name: 'GET /api/customers/:id',
+    invoke: () => getCustomer(request('/api/customers/customer-1'), {
+      params: Promise.resolve({ customerId: 'customer-1' }),
+    }),
+  },
   { name: 'GET /api/export-csv', invoke: () => exportCsv(request('/api/export-csv')) },
   { name: 'GET /api/health/db', invoke: () => databaseHealth(request('/api/health/db')) },
   { name: 'POST /api/import/start', invoke: () => startImport(request('/api/import/start', 'POST')) },

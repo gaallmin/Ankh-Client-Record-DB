@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:integration": "vitest run src/integration --reporter=verbose",
     "db:staging:guard": "node scripts/assert-staging-database.mjs",
+    "db:staging:schema": "node scripts/assert-staging-schema.mjs",
     "sync:native": "cap sync",
     "open:android": "cap open android",
     "open:ios": "cap open ios",
