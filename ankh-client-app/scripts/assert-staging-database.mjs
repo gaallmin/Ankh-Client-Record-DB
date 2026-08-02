@@ -45,8 +45,8 @@ function verifyUrl(name, raw) {
 const pooled = verifyUrl('STAGING_DATABASE_URL', process.env.STAGING_DATABASE_URL)
 const direct = verifyUrl('STAGING_DIRECT_URL', process.env.STAGING_DIRECT_URL)
 
-if (decodeURIComponent(pooled.username) !== decodeURIComponent(direct.username)) {
-  throw new Error('Staging pooled and direct URLs do not identify the same database project')
+if (pooled.pathname !== direct.pathname) {
+  throw new Error('Staging pooled and direct URLs must select the same database name')
 }
 
 console.log(`Staging database identity verified for project ${stagingRef}; production project rejected.`)
