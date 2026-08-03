@@ -36,8 +36,8 @@ describeDb('reservation authorization and database concurrency', () => {
     })
     await prisma.customer.createMany({
       data: [
-        { id: ids.customerA, firstName: 'Client', lastName: 'A' },
-        { id: ids.customerB, firstName: 'Client', lastName: 'B' },
+        { id: ids.customerA, firstName: 'Client', lastName: 'A', email: `client-a-${suffix}@example.invalid` },
+        { id: ids.customerB, firstName: 'Client', lastName: 'B', email: `client-b-${suffix}@example.invalid` },
       ],
     })
     await prisma.clientAccount.createMany({
