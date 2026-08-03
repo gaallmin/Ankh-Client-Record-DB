@@ -1,8 +1,7 @@
 import {getRequestConfig} from 'next-intl/server';
+import {locales, type Locale} from './i18n-routing';
 
-// Can be imported from a shared config
-export const locales = ['en', 'ko'] as const;
-export type Locale = (typeof locales)[number];
+export {locales, type Locale} from './i18n-routing';
 
 export default getRequestConfig(async ({requestLocale}) => {
   // requestLocale is a Promise in Next.js 15
