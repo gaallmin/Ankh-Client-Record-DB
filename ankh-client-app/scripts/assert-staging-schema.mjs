@@ -20,7 +20,22 @@ try {
     throw new Error(`Staging migration verification failed; missing public tables: ${missing.join(', ')}`)
   }
 
-  console.log(`Staging schema verified: ${requiredTables.join(', ')}`)
+  const requiredColumns = [{ table: 'users', column: 'isActive' }]
+  const columns = await prisma.$queryRawUnsafe(
+    `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND (table_name, column_name) IN (${requiredColumns.map((_, index) => `($${index * 2 + 1}, $${index * 2 + 2})`).join(', ')})`,
+    ...requiredColumns.flatMap(({ table, column }) => [table, column]),
+  )
+  const presentColumns = new Set(columns.map(column => `${column.table_name}.${column.column_name}`))
+  const missingColumns = requiredColumns
+    .map(({ table, column }) => `${table}.${column}`)
+    .filter(column => !presentColumns.has(column))
+
+  if (missingColumns.length > 0) {
+    throw new Error(`Staging migration verification failed; missing public columns: ${missingColumns.join(', ')}`)
+  }
+
+  console.log(`Staging schema verified: ${requiredTables.join(', ')}; users.isActive`)
 } finally {
   await prisma.$disconnect()
 }
