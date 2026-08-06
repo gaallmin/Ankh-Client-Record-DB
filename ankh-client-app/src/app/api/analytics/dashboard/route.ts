@@ -115,8 +115,11 @@ export async function GET(request: NextRequest) {
           count(DISTINCT e.customer_id)::int AS "uniqueCustomers"
         FROM finalized_events e
         WHERE e.event_type IS NOT NULL
-        GROUP BY to_char(e.event_at AT TIME ZONE ${businessTimeZone}, 'YYYY-MM')
-        ORDER BY month
+        -- Group by the selected expression position so the parameterized time zone
+        -- is bound only once. Repeating it here creates a different PostgreSQL bind
+        -- parameter, which PostgreSQL does not consider the same grouped expression.
+        GROUP BY 1
+        ORDER BY 1
       `),
       prisma.$queryRaw<InstructorRebookingRow[]>(Prisma.sql`
         WITH completed_events AS (
